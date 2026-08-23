@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "limen:block/structure_void_block"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+# Gradle and build output
+.gradle/
+.gradle-local/
+build/
+out/
+repo/
+src/generated/resources/
+
+# Local run directories
+run/
+run-data/
+
+# IDE and local JDK
+.idea/
+.vscode/
+.jdk/
+*.iml
+
+# Temporary/reference material
+.tmp_goety2/
+input/
+
+# Logs and dumps
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# 美术资产（贴图/模型/动画）暂不上传
+src/main/resources/assets/limen/textures/
+src/main/resources/assets/limen/geo/
+src/main/resources/assets/limen/animations/
+src/main/resources/assets/limen/models/

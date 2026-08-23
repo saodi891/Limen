@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "limen:autonomous_spider",
+    "limen:pama_detector",
+    "limen:skeleton_chipped",
+    "limen:zombie_chipped"
+  ]
+}

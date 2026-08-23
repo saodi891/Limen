@@ -1,0 +1,13 @@
+package com.moonlightc.limen.api.tag;
+
+import com.moonlightc.limen.Limen;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.EntityType;
+
+public final class LimenEntityTypeTags {
+    public static final TagKey<EntityType<?>> REDSTONE_MACHINES = TagKey.create(Registries.ENTITY_TYPE, Limen.id("redstone_machines"));
+
+    private LimenEntityTypeTags() {
+    }
+}

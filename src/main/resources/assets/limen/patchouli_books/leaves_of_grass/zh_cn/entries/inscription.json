@@ -1,0 +1,13 @@
+{
+  "name": "附言",
+  "category": "limen:contents",
+  "icon": "minecraft:writable_book",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "致 W.W.",
+      "text": "\"To my other favorite W.W. It's an honour working with you. Fondly, G.B.\""
+    }
+  ]
+}
