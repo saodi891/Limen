@@ -2,11 +2,15 @@ package com.moonlightc.limen;
 
 import com.mojang.logging.LogUtils;
 import com.moonlightc.limen.config.ModConfigs;
+import com.moonlightc.limen.network.ModNetworking;
 import com.moonlightc.limen.registry.ModBlocks;
+import com.moonlightc.limen.registry.ModBlockEntities;
 import com.moonlightc.limen.registry.ModCreativeTabs;
 import com.moonlightc.limen.registry.ModEntities;
 import com.moonlightc.limen.registry.ModItems;
+import com.moonlightc.limen.registry.ModMenuTypes;
 import com.moonlightc.limen.registry.ModMobEffects;
+import com.moonlightc.limen.registry.ModSounds;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -26,8 +30,11 @@ public final class Limen {
 
         ModItems.register(modBus);
         ModBlocks.register(modBus);
+        ModBlockEntities.register(modBus);
+        ModMenuTypes.register(modBus);
         ModEntities.register(modBus);
         ModMobEffects.register(modBus);
+        ModSounds.register(modBus);
         ModCreativeTabs.register(modBus);
         ModConfigs.register();
 
@@ -41,6 +48,7 @@ public final class Limen {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
+        ModNetworking.register();
         LOGGER.info("Limen common setup complete.");
     }
 }

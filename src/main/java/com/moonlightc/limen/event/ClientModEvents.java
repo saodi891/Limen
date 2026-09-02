@@ -36,17 +36,22 @@ public final class ClientModEvents {
         event.registerEntityRenderer(ModEntities.AUTONOMOUS_SPIDER.get(), AutonomousSpiderRenderer::new);
         event.registerEntityRenderer(ModEntities.SKELETON_CHIPPED.get(), SkeletonChippedRenderer::new);
         event.registerEntityRenderer(ModEntities.ZOMBIE_CHIPPED.get(), ZombieChippedRenderer::new);
+        event.registerBlockEntityRenderer(com.moonlightc.limen.registry.ModBlockEntities.ARTISAN_BOX.get(),
+                context -> new com.moonlightc.limen.entity.client.ArtisanBoxRenderer());
     }
 
     @SubscribeEvent
     @SuppressWarnings("removal")
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
+            net.minecraft.client.gui.screens.MenuScreens.register(
+                    com.moonlightc.limen.registry.ModMenuTypes.ARTISAN_BOX.get(),
+                    com.moonlightc.limen.client.gui.ArtisanBoxScreen::new);
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.STRUCTURE_VOID_BLOCK.get(), RenderType.cutout());
             ItemProperties.register(ModItems.ELECTROMAGNETIC_CROSSBOW.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "pull"),
-                    (stack, level, entity, seed) -> getPull(stack, entity));
+                    (stack, level, entity, seed) -> getPull(stack, level, entity));
             ItemProperties.register(ModItems.ELECTROMAGNETIC_CROSSBOW.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "pulling"),
-                    (stack, level, entity, seed) -> entity != null && entity.isUsingItem() && entity.getUseItem() == stack && !CrossbowItem.isCharged(stack) ? 1.0F : 0.0F);
+                    (stack, level, entity, seed) -> isPulling(stack, entity) ? 1.0F : 0.0F);
             ItemProperties.register(ModItems.ELECTROMAGNETIC_CROSSBOW.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "charged"),
                     (stack, level, entity, seed) -> CrossbowItem.isCharged(stack) ? 1.0F : 0.0F);
             ItemProperties.register(ModItems.LIVING_SHIELD.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "blocking"),
@@ -65,16 +70,65 @@ public final class ClientModEvents {
                     });
             ItemProperties.register(ModItems.DEFLECTION_SHIELD.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "blocking"),
                     (stack, level, entity, seed) -> entity != null && entity.isUsingItem() && entity.getUseItem() == stack ? 1.0F : 0.0F);
+            // Swaps the chainsword to its static overheated model while the vanilla item cooldown
+            // (started when the weapon overheats) is running.
+            ItemProperties.register(ModItems.CHAINSWORD.get(), com.moonlightc.limen.Limen.id("overheated"),
+                    (stack, level, entity, seed) -> {
+                        if (entity instanceof net.minecraft.world.entity.player.Player player) {
+                            return player.getCooldowns().isOnCooldown(stack.getItem()) ? 1.0F : 0.0F;
+                        }
+                        return 0.0F;
+                    });
         });
     }
 
-    private static float getPull(ItemStack stack, LivingEntity entity) {
-        if (entity == null) {
+    private static float getPull(ItemStack stack, net.minecraft.world.level.Level level, LivingEntity entity) {
+        if (CrossbowItem.isCharged(stack)) {
             return 0.0F;
         }
 
-        return entity.getUseItem() != stack || CrossbowItem.isCharged(stack)
-                ? 0.0F
-                : (float) (stack.getUseDuration() - entity.getUseItemRemainingTicks()) / (float) CrossbowItem.getChargeDuration(stack);
+        // Auto-reload (overclock) drives the pull animation from the stored start tick so the
+        // string draws back exactly like a manual reload, even though nobody is "using" the item.
+        Float autoPull = getAutoReloadPull(stack, level, entity);
+        if (autoPull != null) {
+            return autoPull;
+        }
+
+        if (entity == null || entity.getUseItem() != stack) {
+            return 0.0F;
+        }
+        return (float) (stack.getUseDuration() - entity.getUseItemRemainingTicks()) / (float) CrossbowItem.getChargeDuration(stack);
+    }
+
+    private static boolean isPulling(ItemStack stack, LivingEntity entity) {
+        if (CrossbowItem.isCharged(stack)) {
+            return false;
+        }
+        if (entity != null && entity.isUsingItem() && entity.getUseItem() == stack) {
+            return true;
+        }
+        return stack.getOrCreateTag().contains(com.moonlightc.limen.item.ElectromagneticCrossbowItem.AUTO_RELOAD_START_TAG);
+    }
+
+    @org.jetbrains.annotations.Nullable
+    private static Float getAutoReloadPull(ItemStack stack, net.minecraft.world.level.Level level, LivingEntity entity) {
+        net.minecraft.nbt.CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(com.moonlightc.limen.item.ElectromagneticCrossbowItem.AUTO_RELOAD_START_TAG)) {
+            return null;
+        }
+
+        long gameTime;
+        if (level != null) {
+            gameTime = level.getGameTime();
+        } else if (entity != null) {
+            gameTime = entity.level().getGameTime();
+        } else if (net.minecraft.client.Minecraft.getInstance().level != null) {
+            gameTime = net.minecraft.client.Minecraft.getInstance().level.getGameTime();
+        } else {
+            return 0.0F;
+        }
+
+        long elapsed = gameTime - tag.getLong(com.moonlightc.limen.item.ElectromagneticCrossbowItem.AUTO_RELOAD_START_TAG);
+        return net.minecraft.util.Mth.clamp((float) elapsed / (float) CrossbowItem.getChargeDuration(stack), 0.0F, 1.0F);
     }
 }

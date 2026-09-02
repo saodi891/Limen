@@ -1,6 +1,7 @@
 package com.moonlightc.limen.registry;
 
 import com.moonlightc.limen.Limen;
+import com.moonlightc.limen.item.ChainswordItem;
 import com.moonlightc.limen.item.ChargedCoilArrowItem;
 import com.moonlightc.limen.item.ElectromagneticCrossbowItem;
 import com.moonlightc.limen.item.DeflectionShieldItem;
@@ -60,6 +61,11 @@ public final class ModItems {
             () -> new Item(new Item.Properties())
     );
 
+    public static final RegistryObject<Item> REDSTONE_MONSTER_HUNTER = ITEMS.register(
+            "redstone_monster_hunter",
+            () -> new Item(new Item.Properties())
+    );
+
     public static final RegistryObject<Item> CHARGED_COIL_ARROW = ITEMS.register(
             "charged_coil_arrow",
             () -> new ChargedCoilArrowItem(new Item.Properties())
@@ -93,6 +99,31 @@ public final class ModItems {
     public static final RegistryObject<Item> DEFLECTION_SHIELD = ITEMS.register(
             "deflection_shield",
             () -> new DeflectionShieldItem(new Item.Properties().durability(336))
+    );
+
+    public static final RegistryObject<Item> ARTISAN_BOX = ITEMS.register(
+            "artisan_box",
+            () -> new com.moonlightc.limen.item.ArtisanBoxItem(ModBlocks.ARTISAN_BOX.get(), new Item.Properties().stacksTo(1))
+    );
+
+    public static final RegistryObject<Item> ARTISAN_HEART = ITEMS.register(
+            "artisan_heart",
+            () -> new com.moonlightc.limen.item.ArtisanHeartItem(new Item.Properties().stacksTo(1))
+    );
+
+    public static final RegistryObject<Item> CHAINSWORD = ITEMS.register(
+            "chainsword",
+            () -> new ChainswordItem(new Item.Properties())
+    );
+
+    public static final RegistryObject<Item> ELECTROMAGNETIC_CROSSBOW_BLUEPRINT = ITEMS.register(
+            "electromagnetic_crossbow_blueprint",
+            () -> new Item(new Item.Properties().stacksTo(1))
+    );
+
+    public static final RegistryObject<Item> POWERED_POLEARM_BLUEPRINT = ITEMS.register(
+            "powered_polearm_blueprint",
+            () -> new Item(new Item.Properties().stacksTo(1))
     );
 
     private ModItems() {

@@ -1,0 +1,33 @@
+{
+  "parent": "limen:mechanized/root",
+  "display": {
+    "icon": {
+      "item": "limen:redstone_monster_hunter"
+    },
+    "title": {
+      "translate": "advancements.limen.mechanized.redstone_monster_hunter.title"
+    },
+    "description": {
+      "translate": "advancements.limen.mechanized.redstone_monster_hunter.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "kill_redstone_machine": {
+      "trigger": "minecraft:player_killed_entity",
+      "conditions": {
+        "entity": {
+          "type": "#limen:redstone_machines"
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "kill_redstone_machine"
+    ]
+  ]
+}

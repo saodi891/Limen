@@ -41,6 +41,14 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("animation.pama_detector.idle");
     private static final RawAnimation FLY = RawAnimation.begin().thenLoop("animation.pama_detector.fly");
 
+    // Clockwise lead arc (radians) for the wanted orbit point. A fixed lead keeps a steady gap
+    // ahead of the detector so the body flies the circle instead of stalling on a near-zero step.
+    private static final double ORBIT_LEAD_ANGLE = 0.8D;
+
+    // Height above the locked player the orbit ring sits at. The detector rises/descends only to
+    // hold this offset as the player moves vertically; it no longer bobs randomly while locked.
+    private static final double ORBIT_HEIGHT = 1.6D;
+
     private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
     @Nullable
     private UUID lockedPlayerId;
@@ -74,9 +82,12 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(4, new ReviveAutonomousSpiderGoal(this));
-        this.goalSelector.addGoal(5, new HoverAroundGoal(this));
-        this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 12.0F));
-        this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(5, new ApproachDetectedPlayerGoal(this));
+        this.goalSelector.addGoal(6, new HoverAroundGoal(this));
+        // Look goals are suppressed while locking so updateLocking() can keep the head on the
+        // locked player; otherwise the random look-around fights it for the look control.
+        this.goalSelector.addGoal(7, new IdleLookAtPlayerGoal(this));
+        this.goalSelector.addGoal(8, new IdleLookAroundGoal(this));
 
         this.targetSelector.addGoal(1, new RedstoneMachineHurtByTargetGoal(this));
     }
@@ -93,6 +104,19 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
     @Override
     public boolean causeFallDamage(float fallDistance, float multiplier, net.minecraft.world.damagesource.DamageSource source) {
         return false;
+    }
+
+    // The model is only a head, so the body rotation is never rendered. Removing the head-yaw
+    // clamp lets the head point straight at a locked player even while the body faces the orbit
+    // tangent, instead of only glancing over when the body happens to swing around.
+    @Override
+    public int getMaxHeadYRot() {
+        return 180;
+    }
+
+    @Override
+    public int getMaxHeadXRot() {
+        return 90;
     }
 
     @Override
@@ -116,7 +140,7 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
             return null;
         }
         Player player = this.level().getPlayerByUUID(this.lockedPlayerId);
-        if (player == null || !player.isAlive() || this.distanceToSqr(player) > this.getDetectionRange() * this.getDetectionRange() * 1.6D) {
+        if (player == null || !player.isAlive()) {
             this.lockedPlayerId = null;
             return null;
         }
@@ -125,36 +149,19 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
 
     private void updateLocking() {
         Player lockedPlayer = this.getLockedPlayer();
-        if (lockedPlayer != null && this.getLockSlotIndex(lockedPlayer) >= 2) {
-            this.lockedPlayerId = null;
+
+        // A currently-locked player who drifts back out of activation range releases the lock.
+        if (lockedPlayer != null && !this.isWithinLockRange(lockedPlayer)) {
+            this.releaseLock();
             lockedPlayer = null;
         }
 
-        LivingEntity angerTarget = this.getTarget();
-        if (lockedPlayer == null
-                && angerTarget instanceof Player targetPlayer
-                && targetPlayer.isAlive()
-                && this.countLockingDetectors(targetPlayer) < 2) {
-            this.lockedPlayerId = targetPlayer.getUUID();
-            this.glowingCooldownTicks = LimenCommonConfig.PAMA_DETECTOR_LOCK_COOLDOWN_TICKS.get();
-            lockedPlayer = targetPlayer;
-        }
-
         if (lockedPlayer == null) {
-            lockedPlayer = this.findLockablePlayer();
-            if (lockedPlayer != null) {
-                this.lockedPlayerId = lockedPlayer.getUUID();
-                this.glowingCooldownTicks = LimenCommonConfig.PAMA_DETECTOR_LOCK_COOLDOWN_TICKS.get();
-            }
+            lockedPlayer = this.tryAcquireLock();
         }
 
         if (lockedPlayer == null) {
             return;
-        }
-
-        if (angerTarget instanceof Player targetPlayer && targetPlayer.isAlive() && this.countLockingDetectors(targetPlayer) < 2) {
-            this.lockedPlayerId = targetPlayer.getUUID();
-            lockedPlayer = targetPlayer;
         }
 
         this.getLookControl().setLookAt(lockedPlayer, 30.0F, 30.0F);
@@ -162,24 +169,75 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
         this.applyGlowingWhenReady(lockedPlayer);
     }
 
+    /**
+     * Locking only activates once the detector has approached within the activation distance.
+     * Detection (follow range) still lets it fly toward a far player, but the lock, orbit and
+     * glowing all wait until it is close (~3 blocks).
+     */
     @Nullable
-    private Player findLockablePlayer() {
+    private Player tryAcquireLock() {
+        double activate = this.getLockActivateDistance();
+        Player candidate = this.level().getEntitiesOfClass(Player.class, this.getBoundingBox().inflate(activate),
+                        player -> player.isAlive() && !player.isSpectator() && !player.isCreative())
+                .stream()
+                .filter(this::isWithinLockRange)
+                .filter(player -> this.hasLineOfSight(player))
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .orElse(null);
+
+        if (candidate == null) {
+            return null;
+        }
+
+        this.lockedPlayerId = candidate.getUUID();
+        // Lock immediately applies glowing, then the cooldown governs refreshes.
+        this.glowingCooldownTicks = 0;
+        return candidate;
+    }
+
+    private boolean isWithinLockRange(Player player) {
+        double activate = this.getLockActivateDistance();
+        return this.distanceToSqr(player) <= activate * activate;
+    }
+
+    private void releaseLock() {
+        this.lockedPlayerId = null;
+    }
+
+    /**
+     * A player the detector has spotted within its follow range. Used by the approach goal to fly
+     * the detector into lock range.
+     */
+    @Nullable
+    private Player findApproachTarget() {
         double range = this.getDetectionRange();
-        return this.level().getEntitiesOfClass(Player.class, this.getBoundingBox().inflate(range), Player::isAlive)
+        return this.level().getEntitiesOfClass(Player.class, this.getBoundingBox().inflate(range),
+                        player -> player.isAlive() && !player.isSpectator() && !player.isCreative())
                 .stream()
                 .filter(player -> this.hasLineOfSight(player))
-                .filter(player -> this.countLockingDetectors(player) < 2)
                 .min(Comparator.comparingDouble(this::distanceToSqr))
                 .orElse(null);
     }
 
+    /**
+     * Orbit by projecting a lead point further clockwise around the player than the detector's
+     * current angle. A small per-tick step leaves the wanted position almost on top of the
+     * detector, so the move control thinks it has arrived and never travels; a fixed lead arc
+     * keeps a steady gap ahead so the body actually flies the circle.
+     */
     private void orbitLockedPlayer(Player player) {
-        int slot = this.getLockSlot(player);
         double radius = LimenCommonConfig.PAMA_DETECTOR_LOCK_RADIUS.get();
-        double baseAngle = (this.tickCount * 0.08D) + (slot * Math.PI);
-        double targetX = player.getX() + Math.cos(baseAngle) * radius;
-        double targetY = player.getY() + 1.6D + Math.sin(this.tickCount * 0.05D) * 0.35D;
-        double targetZ = player.getZ() + Math.sin(baseAngle) * radius;
+        double dx = this.getX() - player.getX();
+        double dz = this.getZ() - player.getZ();
+        double currentAngle = Math.atan2(dz, dx);
+        // Negative lead = clockwise when viewed from above. ~0.8 rad keeps the target roughly a
+        // block and a half ahead along the arc so the detector keeps moving instead of stalling.
+        double leadAngle = currentAngle - ORBIT_LEAD_ANGLE;
+        double targetX = player.getX() + Math.cos(leadAngle) * radius;
+        double targetZ = player.getZ() + Math.sin(leadAngle) * radius;
+        // Fixed orbit height above the player: no idle bobbing. Vertical movement now happens only
+        // to reach and hold this height as the player moves up or down.
+        double targetY = player.getY() + ORBIT_HEIGHT;
         this.getMoveControl().setWantedPosition(targetX, targetY, targetZ, LimenCommonConfig.PAMA_DETECTOR_LOCK_SPEED.get());
     }
 
@@ -190,31 +248,15 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
         }
 
         if (player.hasEffect(MobEffects.GLOWING)) {
+            this.glowingCooldownTicks = LimenCommonConfig.PAMA_DETECTOR_LOCK_COOLDOWN_TICKS.get();
             return;
         }
         player.addEffect(new MobEffectInstance(MobEffects.GLOWING, LimenCommonConfig.PAMA_DETECTOR_GLOWING_TICKS.get(), 0, false, true));
         this.glowingCooldownTicks = LimenCommonConfig.PAMA_DETECTOR_LOCK_COOLDOWN_TICKS.get();
     }
 
-    private int getLockSlot(Player player) {
-        int index = this.getLockSlotIndex(player);
-        return index <= 0 ? 0 : 1;
-    }
-
-    private int getLockSlotIndex(Player player) {
-        List<PamaDetectorEntity> lockers = this.getLockingDetectors(player);
-        lockers.sort(Comparator.comparing(entity -> entity.getUUID().toString()));
-        return lockers.indexOf(this);
-    }
-
-    private int countLockingDetectors(Player player) {
-        return this.getLockingDetectors(player).size();
-    }
-
-    private List<PamaDetectorEntity> getLockingDetectors(Player player) {
-        double range = this.getDetectionRange() * 1.8D;
-        return this.level().getEntitiesOfClass(PamaDetectorEntity.class, player.getBoundingBox().inflate(range),
-                detector -> detector.isAlive() && player.getUUID().equals(detector.lockedPlayerId));
+    private double getLockActivateDistance() {
+        return LimenCommonConfig.PAMA_DETECTOR_LOCK_ACTIVATE_DISTANCE.get();
     }
 
     private double getDetectionRange() {
@@ -350,6 +392,10 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
 
     private static class HoverAroundGoal extends Goal {
         private final PamaDetectorEntity detector;
+        private double wantedX;
+        private double wantedY;
+        private double wantedZ;
+        private int repathCooldown;
 
         HoverAroundGoal(PamaDetectorEntity detector) {
             this.detector = detector;
@@ -358,22 +404,149 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
 
         @Override
         public boolean canUse() {
-            return this.detector.lockedPlayerId == null
-                    && (!this.detector.getMoveControl().hasWanted()
-                    || this.detector.getRandom().nextInt(30) == 0);
+            return this.detector.lockedPlayerId == null;
         }
 
         @Override
         public boolean canContinueToUse() {
-            return false;
+            return this.detector.lockedPlayerId == null;
         }
 
         @Override
         public void start() {
-            double x = this.detector.getX() + Mth.nextDouble(this.detector.getRandom(), -8.0D, 8.0D);
-            double y = this.detector.getY() + Mth.nextDouble(this.detector.getRandom(), -3.0D, 4.0D);
-            double z = this.detector.getZ() + Mth.nextDouble(this.detector.getRandom(), -8.0D, 8.0D);
-            this.detector.getMoveControl().setWantedPosition(x, y, z, LimenCommonConfig.PAMA_DETECTOR_IDLE_SPEED.get());
+            this.pickNewTarget();
+        }
+
+        @Override
+        public void tick() {
+            // FlyingMoveControl only steers for the single tick after setWantedPosition, so the
+            // target must be re-issued every tick to keep the detector actually drifting (and
+            // floating up/down); a one-shot call in start() would move it for one tick then stall.
+            this.detector.getMoveControl().setWantedPosition(
+                    this.wantedX, this.wantedY, this.wantedZ,
+                    LimenCommonConfig.PAMA_DETECTOR_LOCK_SPEED.get());
+
+            double distanceSq = this.detector.position().distanceToSqr(this.wantedX, this.wantedY, this.wantedZ);
+            if (this.repathCooldown > 0) {
+                this.repathCooldown--;
+            }
+            if (distanceSq < 2.0D || this.repathCooldown <= 0) {
+                this.pickNewTarget();
+            }
+        }
+
+        private void pickNewTarget() {
+            // Full sphere of drift points so the detector wanders horizontally and vertically,
+            // matching vanilla flying idle. The head-only model has no body to snap around.
+            double heading = this.detector.getRandom().nextDouble() * (Math.PI * 2.0D);
+            double distance = Mth.nextDouble(this.detector.getRandom(), 3.0D, 8.0D);
+            this.wantedX = this.detector.getX() + Math.cos(heading) * distance;
+            this.wantedZ = this.detector.getZ() + Math.sin(heading) * distance;
+            this.wantedY = this.detector.getY() + Mth.nextDouble(this.detector.getRandom(), -3.0D, 4.0D);
+            // Re-pick at least every few seconds even if the point is never quite reached.
+            this.repathCooldown = 40 + this.detector.getRandom().nextInt(40);
+        }
+    }
+
+    /**
+     * Flies the detector toward a spotted player until it is inside lock-activation range, where
+     * the locking/orbit logic in {@link #updateLocking()} takes over. Without this the detector
+     * only had idle drift and never actually closed the distance to lock.
+     */
+    private static class ApproachDetectedPlayerGoal extends Goal {
+        private final PamaDetectorEntity detector;
+        @Nullable
+        private Player target;
+
+        ApproachDetectedPlayerGoal(PamaDetectorEntity detector) {
+            this.detector = detector;
+            this.setFlags(EnumSet.of(Goal.Flag.MOVE));
+        }
+
+        @Override
+        public boolean canUse() {
+            if (this.detector.lockedPlayerId != null) {
+                return false;
+            }
+            this.target = this.detector.findApproachTarget();
+            return this.target != null && !this.detector.isWithinLockRange(this.target);
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return this.detector.lockedPlayerId == null
+                    && this.target != null
+                    && this.target.isAlive()
+                    && !this.detector.isWithinLockRange(this.target)
+                    && this.detector.hasLineOfSight(this.target);
+        }
+
+        @Override
+        public void tick() {
+            if (this.target == null) {
+                return;
+            }
+            // Aim just outside the player so the detector settles at orbit distance rather than
+            // colliding, then updateLocking() picks it up once inside activation range.
+            double targetY = this.target.getY() + 1.6D;
+            this.detector.getMoveControl().setWantedPosition(
+                    this.target.getX(), targetY, this.target.getZ(),
+                    LimenCommonConfig.PAMA_DETECTOR_LOCK_SPEED.get());
+        }
+
+        @Override
+        public void stop() {
+            this.target = null;
+        }
+
+        @Override
+        public boolean requiresUpdateEveryTick() {
+            return true;
+        }
+    }
+
+    /**
+     * Vanilla-style "look at the nearest player" idle behaviour, but suppressed while locking so it
+     * does not fight {@link #updateLocking()} for the head orientation.
+     */
+    private static class IdleLookAtPlayerGoal extends LookAtPlayerGoal {
+        private final PamaDetectorEntity detector;
+
+        IdleLookAtPlayerGoal(PamaDetectorEntity detector) {
+            super(detector, Player.class, 12.0F);
+            this.detector = detector;
+        }
+
+        @Override
+        public boolean canUse() {
+            return this.detector.lockedPlayerId == null && super.canUse();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return this.detector.lockedPlayerId == null && super.canContinueToUse();
+        }
+    }
+
+    /**
+     * Vanilla-style idle head sweeping, suppressed while locking so the head stays on the target.
+     */
+    private static class IdleLookAroundGoal extends RandomLookAroundGoal {
+        private final PamaDetectorEntity detector;
+
+        IdleLookAroundGoal(PamaDetectorEntity detector) {
+            super(detector);
+            this.detector = detector;
+        }
+
+        @Override
+        public boolean canUse() {
+            return this.detector.lockedPlayerId == null && super.canUse();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return this.detector.lockedPlayerId == null && super.canContinueToUse();
         }
     }
 }

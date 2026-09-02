@@ -11,6 +11,7 @@ public final class LimenCommonConfig {
     public static final ForgeConfigSpec.DoubleValue PAMA_DETECTOR_IDLE_SPEED;
     public static final ForgeConfigSpec.DoubleValue PAMA_DETECTOR_LOCK_SPEED;
     public static final ForgeConfigSpec.DoubleValue PAMA_DETECTOR_LOCK_RADIUS;
+    public static final ForgeConfigSpec.DoubleValue PAMA_DETECTOR_LOCK_ACTIVATE_DISTANCE;
     public static final ForgeConfigSpec.IntValue PAMA_DETECTOR_LOCK_COOLDOWN_TICKS;
     public static final ForgeConfigSpec.IntValue PAMA_DETECTOR_GLOWING_TICKS;
     public static final ForgeConfigSpec.BooleanValue ENABLE_ZOMBIE_CHIPPED;
@@ -26,6 +27,16 @@ public final class LimenCommonConfig {
     public static final ForgeConfigSpec.IntValue AUTONOMOUS_SPIDER_SKILL1_WARMUP_TICKS;
     public static final ForgeConfigSpec.IntValue AUTONOMOUS_SPIDER_SKILL1_SHOCKED_TICKS;
     public static final ForgeConfigSpec.DoubleValue SHOCKED_FOV_SCALE;
+    public static final ForgeConfigSpec.IntValue CHAINSWORD_HOLD_THRESHOLD_TICKS;
+    public static final ForgeConfigSpec.IntValue CHAINSWORD_SUSTAINED_INTERVAL_TICKS;
+    public static final ForgeConfigSpec.DoubleValue CHAINSWORD_SUSTAINED_DAMAGE;
+    public static final ForgeConfigSpec.IntValue CHAINSWORD_HITS_PER_SETTLEMENT;
+    public static final ForgeConfigSpec.DoubleValue CHAINSWORD_SUSTAINED_RADIUS;
+    public static final ForgeConfigSpec.IntValue CHAINSWORD_OVERHEAT_DURATION_TICKS;
+    public static final ForgeConfigSpec.IntValue CHAINSWORD_OVERHEAT_TICKS;
+    public static final ForgeConfigSpec.IntValue CHAINSWORD_OVERHEAT_DURABILITY_COST;
+    public static final ForgeConfigSpec.DoubleValue CHAINSWORD_KNOCKBACK_SCALE;
+    public static final ForgeConfigSpec.IntValue ARTISAN_BOX_LINK_DISTANCE;
     public static final ForgeConfigSpec.BooleanValue DEBUG_LOGS;
 
     static {
@@ -49,7 +60,10 @@ public final class LimenCommonConfig {
                 .defineInRange("pamaDetectorLockSpeed", 1.15D, 0.05D, 8.0D);
         PAMA_DETECTOR_LOCK_RADIUS = builder
                 .comment("Orbit radius around a locked player.")
-                .defineInRange("pamaDetectorLockRadius", 4.0D, 1.0D, 16.0D);
+                .defineInRange("pamaDetectorLockRadius", 2.0D, 1.0D, 16.0D);
+        PAMA_DETECTOR_LOCK_ACTIVATE_DISTANCE = builder
+                .comment("Detector must approach within this distance (blocks) of a player before it can lock, orbit and apply glowing. Detection range stays governed by follow range.")
+                .defineInRange("pamaDetectorLockActivateDistance", 3.0D, 1.0D, 64.0D);
         PAMA_DETECTOR_LOCK_COOLDOWN_TICKS = builder
                 .comment("Cooldown before Detector applies glowing to its locked player. 80 ticks = 4 seconds.")
                 .defineInRange("pamaDetectorLockCooldownTicks", 80, 1, 20 * 60 * 10);
@@ -95,6 +109,39 @@ public final class LimenCommonConfig {
         SHOCKED_FOV_SCALE = builder
                 .comment("FOV multiplier applied while a player is Shocked.")
                 .defineInRange("shockedFovScale", 0.7D, 0.1D, 1.0D);
+        builder.pop();
+
+        builder.push("items");
+        CHAINSWORD_HOLD_THRESHOLD_TICKS = builder
+                .comment("How long left-click must be held before the chainsword enters sustained-attack mode. 6 ticks = 0.3 seconds.")
+                .defineInRange("chainswordHoldThresholdTicks", 6, 1, 20 * 10);
+        CHAINSWORD_SUSTAINED_INTERVAL_TICKS = builder
+                .comment("Ticks between damage instances while the chainsword is in sustained-attack mode. 10 ticks = 0.5 seconds.")
+                .defineInRange("chainswordSustainedIntervalTicks", 10, 1, 20 * 10);
+        CHAINSWORD_SUSTAINED_DAMAGE = builder
+                .comment("Damage per hit while the chainsword grinds. Each settlement deals this twice.")
+                .defineInRange("chainswordSustainedDamage", 3.0D, 0.0D, 1024.0D);
+        CHAINSWORD_HITS_PER_SETTLEMENT = builder
+                .comment("How many consecutive damage instances each grind settlement deals.")
+                .defineInRange("chainswordHitsPerSettlement", 2, 1, 16);
+        CHAINSWORD_SUSTAINED_RADIUS = builder
+                .comment("Radius (blocks) of the chainsword's sustained area-of-effect damage.")
+                .defineInRange("chainswordSustainedRadius", 3.0D, 0.5D, 16.0D);
+        CHAINSWORD_OVERHEAT_DURATION_TICKS = builder
+                .comment("How long sustained attack may run before the chainsword overheats. 120 ticks = 6 seconds.")
+                .defineInRange("chainswordOverheatDurationTicks", 120, 1, 20 * 60);
+        CHAINSWORD_OVERHEAT_TICKS = builder
+                .comment("Overheat cooldown length, during which the chainsword cannot attack. 30 ticks = 1.5 seconds.")
+                .defineInRange("chainswordOverheatTicks", 30, 1, 20 * 60);
+        CHAINSWORD_OVERHEAT_DURABILITY_COST = builder
+                .comment("Extra durability consumed the moment the chainsword overheats.")
+                .defineInRange("chainswordOverheatDurabilityCost", 10, 0, 1024);
+        CHAINSWORD_KNOCKBACK_SCALE = builder
+                .comment("Knockback multiplier applied to targets hit by the chainsword. 0.333 = one third of the normal amount.")
+                .defineInRange("chainswordKnockbackScale", 1.0D / 3.0D, 0.0D, 1.0D);
+        ARTISAN_BOX_LINK_DISTANCE = builder
+                .comment("Manhattan distance within which a bound artisan heart keeps its artisan box linked and held open.")
+                .defineInRange("artisanBoxLinkDistance", 10, 1, 256);
         builder.pop();
 
         builder.push("debug");

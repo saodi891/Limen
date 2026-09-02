@@ -19,6 +19,9 @@ public class ElectromagneticCrossbowItem extends CrossbowItem {
     public static final int MODEL_SPECTRAL = 1;
     public static final int MODEL_COIL = 2;
 
+    // Gametime the current overclock auto-reload began; absent when not auto-reloading.
+    public static final String AUTO_RELOAD_START_TAG = "LimenAutoReloadStart";
+
     public ElectromagneticCrossbowItem(Properties properties) {
         super(properties);
     }

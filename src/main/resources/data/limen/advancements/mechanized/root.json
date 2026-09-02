@@ -1,0 +1,27 @@
+{
+  "display": {
+    "icon": {
+      "item": "limen:mindcontrol_chip"
+    },
+    "title": {
+      "translate": "advancements.limen.mechanized.root.title"
+    },
+    "description": {
+      "translate": "advancements.limen.mechanized.root.description"
+    },
+    "background": "minecraft:textures/block/redstone_block.png",
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "tick": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "requirements": [
+    [
+      "tick"
+    ]
+  ]
+}

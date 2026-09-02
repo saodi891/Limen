@@ -1,6 +1,7 @@
 package com.moonlightc.limen.registry;
 
 import com.moonlightc.limen.Limen;
+import com.moonlightc.limen.block.ArtisanBoxBlock;
 import com.moonlightc.limen.block.StructureVoidBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -27,6 +28,15 @@ public final class ModBlocks {
                     .noCollission()
                     .strength(-1.0F, 3600000.0F)
                     .sound(SoundType.GLASS))
+    );
+
+    public static final RegistryObject<Block> ARTISAN_BOX = BLOCKS.register(
+            "artisan_box",
+            () -> new ArtisanBoxBlock(BlockBehaviour.Properties.copy(Blocks.SHULKER_BOX)
+                    .strength(2.0F, 6.0F)
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
+                    .dynamicShape())
     );
 
     private ModBlocks() {

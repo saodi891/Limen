@@ -12,6 +12,7 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.Chicken;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -59,6 +60,10 @@ public class ZombieChippedEntity extends Zombie implements GeoEntity {
             this.getAttribute(Attributes.SPAWN_REINFORCEMENTS_CHANCE).setBaseValue(0.0D);
         }
 
+        // Zombie.finalizeSpawn may have rolled a baby and given it a chicken to ride. Clearing the
+        // baby flag alone leaves the chicken behind, so the mount is dismissed explicitly here.
+        this.removeChickenJockeyMount();
+
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             this.setItemSlot(slot, ItemStack.EMPTY);
             this.setDropChance(slot, 0.0F);
@@ -67,11 +72,30 @@ public class ZombieChippedEntity extends Zombie implements GeoEntity {
         return data;
     }
 
+    /** Controlled zombies are never babies, so the baby-only chicken jockey must never persist. */
+    private void removeChickenJockeyMount() {
+        if (this.getVehicle() instanceof Chicken chicken) {
+            this.stopRiding();
+            chicken.discard();
+        }
+    }
+
+    @Override
+    public boolean isBaby() {
+        return false;
+    }
+
+    @Override
+    public void setBaby(boolean baby) {
+        super.setBaby(false);
+    }
+
     @Override
     public void aiStep() {
         super.aiStep();
-        if (this.isBaby()) {
-            this.setBaby(false);
+        // Guards against anything else (spawn eggs, commands, other mods) mounting a chicken later.
+        if (!this.level().isClientSide) {
+            this.removeChickenJockeyMount();
         }
         if (!this.level().isClientSide && this.isAlive() && this.isEyeInFluid(FluidTags.WATER)) {
             this.convertToVanillaZombie();

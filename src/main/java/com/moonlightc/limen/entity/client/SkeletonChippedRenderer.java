@@ -40,14 +40,13 @@ public class SkeletonChippedRenderer extends GeoEntityRenderer<SkeletonChippedEn
                 poseStack.pushPose();
 
                 if ("rightItem".equals(bone.getName())) {
+                    // Let the item's own THIRD_PERSON_RIGHT_HAND display transform position it, the
+                    // same way a vanilla skeleton holds a bow (upright in the hand). No extra manual
+                    // rotation, which is what previously laid the bow flat.
                     poseStack.translate(-0.05D, 0.08D, -0.02D);
-                    poseStack.mulPose(Axis.XP.rotationDegrees(-90.0F));
-                    poseStack.mulPose(Axis.ZP.rotationDegrees(-90.0F));
                     poseStack.scale(0.9F, 0.9F, 0.9F);
                 } else if ("leftItem".equals(bone.getName())) {
                     poseStack.translate(0.05D, 0.08D, -0.02D);
-                    poseStack.mulPose(Axis.XP.rotationDegrees(-90.0F));
-                    poseStack.mulPose(Axis.ZP.rotationDegrees(90.0F));
                     poseStack.scale(0.9F, 0.9F, 0.9F);
                 }
 

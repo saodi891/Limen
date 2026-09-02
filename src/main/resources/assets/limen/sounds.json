@@ -1,2 +1,23 @@
 {
+  "chainsword_start": {
+    "category": "player",
+    "subtitle": "subtitles.limen.chainsword_start",
+    "sounds": [
+      "limen:item/chainsword_start"
+    ]
+  },
+  "chainsword_grind": {
+    "category": "player",
+    "subtitle": "subtitles.limen.chainsword_grind",
+    "sounds": [
+      "limen:item/chainsword_grind"
+    ]
+  },
+  "chainsword_overheat": {
+    "category": "player",
+    "subtitle": "subtitles.limen.chainsword_overheat",
+    "sounds": [
+      "limen:item/chainsword_overheat"
+    ]
+  }
 }

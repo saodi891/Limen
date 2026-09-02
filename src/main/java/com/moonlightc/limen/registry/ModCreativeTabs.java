@@ -22,6 +22,8 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.PAMA_DETECTOR_SPAWN_EGG.get());
                         output.accept(ModItems.AUTONOMOUS_SPIDER_REMAINS.get());
                         output.accept(ModItems.STRUCTURE_VOID_BLOCK.get());
+                        output.accept(ModItems.ARTISAN_BOX.get());
+                        output.accept(ModItems.ARTISAN_HEART.get());
                         output.accept(ModItems.SKELETON_CHIPPED_SPAWN_EGG.get());
                         output.accept(ModItems.ZOMBIE_CHIPPED_SPAWN_EGG.get());
                         output.accept(ModItems.DAMAGED_CHIP.get());
@@ -31,8 +33,11 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.LEAVES_OF_GRASS.get());
                         output.accept(ModItems.POLEARM_COMBAT_TECHNIQUES.get());
                         output.accept(ModItems.ROYAL_POLEARM.get());
+                        output.accept(ModItems.CHAINSWORD.get());
                         output.accept(ModItems.LIVING_SHIELD.get());
                         output.accept(ModItems.DEFLECTION_SHIELD.get());
+                        output.accept(ModItems.ELECTROMAGNETIC_CROSSBOW_BLUEPRINT.get());
+                        output.accept(ModItems.POWERED_POLEARM_BLUEPRINT.get());
                     })
                     .build()
     );

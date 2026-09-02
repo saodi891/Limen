@@ -17,6 +17,12 @@ public final class ModMobEffects {
             }
     );
 
+    public static final RegistryObject<MobEffect> OVERCLOCK = MOB_EFFECTS.register(
+            "overclock",
+            () -> new MobEffect(MobEffectCategory.BENEFICIAL, 0x36C9E0) {
+            }
+    );
+
     private ModMobEffects() {
     }
 
