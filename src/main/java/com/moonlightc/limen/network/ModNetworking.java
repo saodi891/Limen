@@ -35,5 +35,25 @@ public final class ModNetworking {
                 .encoder(ChainswordGrindPacket::encode)
                 .consumerMainThread(ChainswordGrindPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(ArtisanHotbarsSyncPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(ArtisanHotbarsSyncPacket::decode)
+                .encoder(ArtisanHotbarsSyncPacket::encode)
+                .consumerMainThread(ArtisanHotbarsSyncPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ArtisanHotbarSelectPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .decoder(ArtisanHotbarSelectPacket::decode)
+                .encoder(ArtisanHotbarSelectPacket::encode)
+                .consumerMainThread(ArtisanHotbarSelectPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ArtisanHotbarSlotClickPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .decoder(ArtisanHotbarSlotClickPacket::decode)
+                .encoder(ArtisanHotbarSlotClickPacket::encode)
+                .consumerMainThread(ArtisanHotbarSlotClickPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ArtisanBoxSwapPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .decoder(ArtisanBoxSwapPacket::decode)
+                .encoder(ArtisanBoxSwapPacket::encode)
+                .consumerMainThread(ArtisanBoxSwapPacket::handle)
+                .add();
     }
 }

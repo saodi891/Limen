@@ -32,8 +32,10 @@ public final class ModBlocks {
 
     public static final RegistryObject<Block> ARTISAN_BOX = BLOCKS.register(
             "artisan_box",
+            // Blackstone's hardness and blast resistance. Deliberately not requiresCorrectToolForDrops:
+            // a pickaxe mines it faster (via the mineable/pickaxe tag) but bare hands still drop it.
             () -> new ArtisanBoxBlock(BlockBehaviour.Properties.copy(Blocks.SHULKER_BOX)
-                    .strength(2.0F, 6.0F)
+                    .strength(1.5F, 6.0F)
                     .sound(SoundType.METAL)
                     .noOcclusion()
                     .dynamicShape())

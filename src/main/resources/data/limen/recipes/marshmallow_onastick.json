@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "minecraft:stick"
+    },
+    {
+      "item": "limen:marshmallow"
+    }
+  ],
+  "result": {
+    "item": "limen:marshmallow_onastick",
+    "count": 1
+  }
+}

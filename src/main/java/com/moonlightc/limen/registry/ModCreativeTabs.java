@@ -34,6 +34,9 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.POLEARM_COMBAT_TECHNIQUES.get());
                         output.accept(ModItems.ROYAL_POLEARM.get());
                         output.accept(ModItems.CHAINSWORD.get());
+                        output.accept(ModItems.MARSHMALLOW.get());
+                        output.accept(ModItems.MARSHMALLOW_ONASTICK.get());
+                        output.accept(ModItems.MARSHMALLOW_ONABLAZEROD.get());
                         output.accept(ModItems.LIVING_SHIELD.get());
                         output.accept(ModItems.DEFLECTION_SHIELD.get());
                         output.accept(ModItems.ELECTROMAGNETIC_CROSSBOW_BLUEPRINT.get());

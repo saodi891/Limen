@@ -63,12 +63,21 @@ public class ArtisanBoxBlockEntity extends RandomizableContainerBlockEntity impl
     /** Slots reserved for the linked-state behaviour shipping in the artisan heart update. */
     public static final int LINKED_SLOTS = 9;
     private static final int OPEN_ANIMATION_TICKS = 10;
+    /**
+     * How stale an open lid may be and still animate for a client that is only now seeing this box.
+     * Sized to cover the server having flipped the lid while the chunk was still queued for sending —
+     * which is what running at speed does — without letting a box that has stood open for a while
+     * replay its animation for every player who later wanders up to it.
+     */
+    private static final int LID_ANIMATE_ON_SIGHT_TICKS = 100;
     /** The lid always opens upward, and needs this much clear space above to do so. */
     public static final double LID_CLEARANCE = 0.5D;
 
     public static final String TAG_HEART_ID = "ArtisanHeartId";
     public static final String TAG_OWNER_ID = "ArtisanBoxOwner";
     public static final String TAG_LID_OPEN = "ArtisanBoxLidOpen";
+    /** Only ever written into sync tags, never to disk — see {@link #adoptLidState(CompoundTag)}. */
+    public static final String TAG_LID_AGE = "ArtisanBoxLidAge";
 
     public static final String CONTROLLER_LID = "lid";
     // Animation names come from the Blockbench file: plain "open" / "close", held on the last frame
@@ -88,6 +97,12 @@ public class ArtisanBoxBlockEntity extends RandomizableContainerBlockEntity impl
     private boolean lidOpen;
     /** Cleared on the first sync so a box that is already open does not animate open again. */
     private boolean adoptedLidState;
+    /**
+     * Server-side game time of the last {@link #lidOpen} flip, or {@link Long#MIN_VALUE} for a box
+     * loaded from disk. Sent as an age so a client meeting this box for the first time can tell a lid
+     * that just moved from one that was already up before it arrived.
+     */
+    private long lidChangedAt = Long.MIN_VALUE;
 
     /** Identity of the bound heart, so a heart that has since been re-bound elsewhere stops matching. */
     @Nullable
@@ -246,6 +261,7 @@ public class ArtisanBoxBlockEntity extends RandomizableContainerBlockEntity impl
         }
 
         this.lidOpen = shouldBeOpen;
+        this.lidChangedAt = level.getGameTime();
         this.setChanged();
         this.syncToClients();
         playLidSound(level, this.getBlockPos(),
@@ -415,8 +431,7 @@ public class ArtisanBoxBlockEntity extends RandomizableContainerBlockEntity impl
         this.loadFromTag(tag);
         this.heartId = tag.hasUUID(TAG_HEART_ID) ? tag.getUUID(TAG_HEART_ID) : null;
         this.ownerId = tag.hasUUID(TAG_OWNER_ID) ? tag.getUUID(TAG_OWNER_ID) : null;
-        this.lidOpen = tag.getBoolean(TAG_LID_OPEN);
-        this.adoptLidStateOnce();
+        this.adoptLidState(tag);
     }
 
     @Override
@@ -431,7 +446,10 @@ public class ArtisanBoxBlockEntity extends RandomizableContainerBlockEntity impl
         if (this.ownerId != null) {
             tag.putUUID(TAG_OWNER_ID, this.ownerId);
         }
-        tag.putBoolean(TAG_LID_OPEN, this.lidOpen);
+        // The lid flag is deliberately not saved. It is derived every tick from the viewer count and
+        // the link, and viewers never survive a reload — so writing it can only preserve a stale open
+        // lid, which then reloads already-open and skips its animation. Loading closed and letting the
+        // first tick re-derive it means a still-in-range heart opens the box for real.
     }
 
     public void loadFromTag(CompoundTag tag) {
@@ -470,6 +488,7 @@ public class ArtisanBoxBlockEntity extends RandomizableContainerBlockEntity impl
     public CompoundTag getUpdateTag() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean(TAG_LID_OPEN, this.lidOpen);
+        tag.putLong(TAG_LID_AGE, this.lidAge());
         if (this.heartId != null) {
             tag.putUUID(TAG_HEART_ID, this.heartId);
         }
@@ -479,27 +498,52 @@ public class ArtisanBoxBlockEntity extends RandomizableContainerBlockEntity impl
         return tag;
     }
 
+    /**
+     * Ticks since the lid last flipped, as seen by the server at the moment the packet is built.
+     * Sent instead of the raw timestamp because the client's game time is its own and would not line
+     * up. {@link Long#MAX_VALUE} means "as long as this box has existed", i.e. straight off disk.
+     */
+    private long lidAge() {
+        if (this.lidChangedAt == Long.MIN_VALUE || this.level == null) {
+            return Long.MAX_VALUE;
+        }
+        return Math.max(0L, this.level.getGameTime() - this.lidChangedAt);
+    }
+
     /** Client-side counterpart of {@link #getUpdateTag()}; leaves the container contents alone. */
     @Override
     public void handleUpdateTag(CompoundTag tag) {
         this.heartId = tag.hasUUID(TAG_HEART_ID) ? tag.getUUID(TAG_HEART_ID) : null;
         this.ownerId = tag.hasUUID(TAG_OWNER_ID) ? tag.getUUID(TAG_OWNER_ID) : null;
-        this.lidOpen = tag.getBoolean(TAG_LID_OPEN);
-        this.adoptLidStateOnce();
+        this.adoptLidState(tag);
     }
 
     /**
-     * The first time we hear about this box — chunk load on the server, first update packet on the
-     * client — adopt its lid state outright, so a box that is already open does not replay the
-     * opening animation. Later syncs fall through and animate normally.
+     * Applies a synced lid flag, deciding whether it should animate or be snapped into place.
+     *
+     * <p>Every later sync animates normally. Only the very first one this instance sees needs a
+     * decision, and a per-instance flag alone cannot make it: walking up to a box that has stood open
+     * for an hour and walking into one whose lid opened as the chunk was still in flight both look
+     * like "first packet, already open". So the server sends how long ago the flip happened, and an
+     * open that is younger than {@link #LID_ANIMATE_ON_SIGHT_TICKS} is treated as new to this client
+     * and animates — which is what fixes the skipped opening when a player runs up carrying the heart.
+     *
+     * <p>Only opening is animated on sight. A box that reads closed is left closed: the closed lid is
+     * the model's own rest pose, so snapping it up just to play a close would be a worse artifact than
+     * the missing animation.
      */
-    private void adoptLidStateOnce() {
+    private void adoptLidState(CompoundTag tag) {
+        this.lidOpen = tag.getBoolean(TAG_LID_OPEN);
         if (this.adoptedLidState) {
             return;
         }
         this.adoptedLidState = true;
-        this.animationStatus = this.lidOpen ? AnimationStatus.OPENED : AnimationStatus.CLOSED;
-        this.progress = this.lidOpen ? 1.0F : 0.0F;
+
+        long age = tag.contains(TAG_LID_AGE) ? tag.getLong(TAG_LID_AGE) : Long.MAX_VALUE;
+        boolean animateOpen = this.lidOpen && age < LID_ANIMATE_ON_SIGHT_TICKS;
+        // Starting from closed lets updateAnimation drive the lid up the rest of the way itself.
+        this.animationStatus = this.lidOpen && !animateOpen ? AnimationStatus.OPENED : AnimationStatus.CLOSED;
+        this.progress = this.animationStatus == AnimationStatus.OPENED ? 1.0F : 0.0F;
         this.progressOld = this.progress;
     }
 }

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "minecraft:blaze_rod"
+    },
+    {
+      "item": "limen:marshmallow"
+    }
+  ],
+  "result": {
+    "item": "limen:marshmallow_onablazerod",
+    "count": 1
+  }
+}

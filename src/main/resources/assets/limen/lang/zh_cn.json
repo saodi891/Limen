@@ -22,6 +22,9 @@
   "item.limen.polearm_combat_techniques": "\u300a\u957f\u67c4\u5200\u683c\u6597\u6280\u5de7\u300b",
   "item.limen.royal_polearm": "\u7687\u5ba4\u957f\u67c4\u5200",
   "item.limen.chainsword": "\u952f\u5251",
+  "item.limen.marshmallow": "\u68c9\u82b1\u7cd6",
+  "item.limen.marshmallow_onastick": "\u68d2\u68d2\u68c9\u82b1\u7cd6",
+  "item.limen.marshmallow_onablazerod": "\u70c8\u7130\u68d2\u68d2\u68c9\u82b1\u7cd6",
   "item.limen.living_shield": "\u6d3b\u4f53\u76fe",
   "item.limen.deflection_shield": "\u504f\u8f6c\u76fe",
   "item.limen.electromagnetic_crossbow_blueprint": "\u7535\u78c1\u8f68\u9053\u5f29\u84dd\u56fe",
@@ -33,6 +36,10 @@
   "subtitles.limen.chainsword_overheat": "\u952f\u5251\u8fc7\u70ed",
   "tooltip.limen.artisan_heart.unbound": "\u5c1a\u672a\u7ed1\u5b9a\u4efb\u4f55\u5de5\u5320\u7bb1",
   "tooltip.limen.artisan_heart.bound": "\u5df2\u7ed1\u5b9a\u5de5\u5320\u7bb1 %s, %s, %s",
+  "key.categories.limen": "\u95e8\u6249\u4e4b\u5916",
+  "key.limen.artisan_hotbar_1": "\u5de5\u5320\u683c 1",
+  "key.limen.artisan_hotbar_2": "\u5de5\u5320\u683c 2",
+  "key.limen.artisan_hotbar_3": "\u5de5\u5320\u683c 3",
   "message.limen.polearm_combat_techniques.learned": "\u4f60\u5df2\u5b66\u4f1a\u957f\u67c4\u5200\u7684\u7279\u6b8a\u6218\u6597\u6280\u5de7\u3002",
   "message.limen.polearm_combat_techniques.already_known": "\u4f60\u5df2\u7ecf\u638c\u63e1\u8fd9\u672c\u4e66\u7684\u5185\u5bb9\u4e86\u3002",
   "message.limen.royal_polearm.locked": "\u4f60\u8fd8\u6ca1\u6709\u638c\u63e1\u957f\u67c4\u5200\u683c\u6597\u6280\u5de7\u3002",
@@ -46,5 +53,6 @@
   "advancements.limen.mechanized.root.title": "\u95e8\u6249\u4e4b\u5916\uff1a\u667a\u68b0",
   "advancements.limen.mechanized.root.description": "PAMA\u7684\u9020\u7269\u5f00\u59cb\u5728\u4e16\u754c\u4e2d\u6e38\u8361",
   "advancements.limen.mechanized.redstone_monster_hunter.title": "\u7ea2\u77f3\u602a\u7269\u730e\u4eba",
-  "advancements.limen.mechanized.redstone_monster_hunter.description": "\u6740\u6b7b\u4efb\u610f\u7ea2\u77f3\u5668\u68b0"
+  "advancements.limen.mechanized.redstone_monster_hunter.description": "\u6740\u6b7b\u4efb\u610f\u7ea2\u77f3\u5668\u68b0",
+  "tooltip.limen.artisan_hotbar.slot": "\u5de5\u5320\u683c %s"
 }

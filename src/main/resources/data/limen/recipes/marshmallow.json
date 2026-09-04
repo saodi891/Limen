@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "group": "marshmallow",
+  "ingredients": [
+    {
+      "item": "minecraft:water_bucket"
+    },
+    [
+      {
+        "item": "minecraft:slime_ball"
+      },
+      {
+        "item": "minecraft:magma_cream"
+      }
+    ],
+    {
+      "item": "minecraft:egg"
+    },
+    {
+      "item": "minecraft:sugar"
+    }
+  ],
+  "result": {
+    "item": "limen:marshmallow",
+    "count": 3
+  }
+}

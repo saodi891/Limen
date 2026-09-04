@@ -1,16 +1,20 @@
 package com.moonlightc.limen.item;
 
 import com.moonlightc.limen.block.entity.ArtisanBoxBlockEntity;
+import com.moonlightc.limen.hotbar.ArtisanHotbars;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
@@ -41,9 +45,17 @@ public class ArtisanHeartItem extends Item {
     public static final String TAG_BOUND = "ArtisanBoxBound";
     /** Unique per binding, so a box can tell its current heart from one it has replaced. */
     public static final String TAG_HEART_ID = "ArtisanHeartId";
+    /**
+     * Snapshot of the artisan hotbar slots, kept current while the heart is carried so the contents
+     * are still readable once it is not. Written under the vanilla {@code Items} key so
+     * {@link net.minecraft.world.ContainerHelper} can load it directly.
+     */
+    public static final String TAG_STORED = "ArtisanStored";
 
     /** Revalidating every tick would chase block entities constantly; once a second is plenty. */
     private static final int VALIDATE_INTERVAL_TICKS = 20;
+    /** Tooltip lines before the "and N more" summary, matching the shulker box's own limit. */
+    private static final int TOOLTIP_ITEM_LIMIT = 5;
 
     public ArtisanHeartItem(Properties properties) {
         super(properties);
@@ -131,6 +143,44 @@ public class ArtisanHeartItem extends Item {
         tag.remove(TAG_BOUND);
     }
 
+    // ------------------------------------------------------- stored hotbar slots
+
+    /**
+     * Records the artisan hotbar slots on the heart. Called while the heart is carried, so that once
+     * it leaves the inventory — locking the slots — the contents are still visible on the item.
+     *
+     * <p>Deliberately writes nothing when the slots are all empty, so an unused heart carries no tag
+     * and stacks with a fresh one.
+     */
+    public static void setStoredSlots(ItemStack stack, NonNullList<ItemStack> slots) {
+        boolean empty = true;
+        for (ItemStack slot : slots) {
+            if (!slot.isEmpty()) {
+                empty = false;
+                break;
+            }
+        }
+
+        if (empty) {
+            CompoundTag tag = stack.getTag();
+            if (tag != null) {
+                tag.remove(TAG_STORED);
+            }
+            return;
+        }
+        stack.getOrCreateTag().put(TAG_STORED, ContainerHelper.saveAllItems(new CompoundTag(), slots, false));
+    }
+
+    /** The slots recorded by {@link #setStoredSlots}, or all-empty when the heart has never held any. */
+    public static NonNullList<ItemStack> getStoredSlots(ItemStack stack, int size) {
+        NonNullList<ItemStack> slots = NonNullList.withSize(size, ItemStack.EMPTY);
+        CompoundTag tag = stack.getTag();
+        if (tag != null && tag.contains(TAG_STORED, Tag.TAG_COMPOUND)) {
+            ContainerHelper.loadAllItems(tag.getCompound(TAG_STORED), slots);
+        }
+        return slots;
+    }
+
     /**
      * Drops the binding once it no longer holds: the box was broken, or another heart took its place.
      * Only checks while the bound box's chunk is loaded, so carrying a heart away from its box —
@@ -172,6 +222,8 @@ public class ArtisanHeartItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        appendStoredSlots(stack, tooltip);
+
         Optional<GlobalPos> bound = getBoundBox(stack);
         if (bound.isEmpty()) {
             tooltip.add(Component.translatable("tooltip.limen.artisan_heart.unbound").withStyle(ChatFormatting.GRAY));
@@ -183,5 +235,35 @@ public class ArtisanHeartItem extends Item {
         tooltip.add(Component.translatable("tooltip.limen.artisan_heart.bound",
                 pos.getX(), pos.getY(), pos.getZ()).withStyle(ChatFormatting.AQUA));
         tooltip.add(Component.literal(dimension.toString()).withStyle(ChatFormatting.DARK_GRAY));
+    }
+
+    /**
+     * Lists the stored artisan slots the way a shulker box lists its contents: up to
+     * {@link #TOOLTIP_ITEM_LIMIT} entries as "name x count", then a summary line for the rest.
+     */
+    private static void appendStoredSlots(ItemStack stack, List<Component> tooltip) {
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(TAG_STORED, Tag.TAG_COMPOUND)) {
+            return;
+        }
+
+        NonNullList<ItemStack> slots = getStoredSlots(stack, ArtisanHotbars.SLOT_COUNT);
+        int shown = 0;
+        int total = 0;
+        for (ItemStack slot : slots) {
+            if (slot.isEmpty()) {
+                continue;
+            }
+            total++;
+            if (shown < TOOLTIP_ITEM_LIMIT) {
+                shown++;
+                tooltip.add(slot.getHoverName().copy().append(" x").append(String.valueOf(slot.getCount())));
+            }
+        }
+
+        if (total > shown) {
+            tooltip.add(Component.translatable("container.shulkerBox.more", total - shown)
+                    .withStyle(ChatFormatting.ITALIC));
+        }
     }
 }

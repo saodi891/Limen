@@ -37,6 +37,7 @@ public final class LimenCommonConfig {
     public static final ForgeConfigSpec.IntValue CHAINSWORD_OVERHEAT_DURABILITY_COST;
     public static final ForgeConfigSpec.DoubleValue CHAINSWORD_KNOCKBACK_SCALE;
     public static final ForgeConfigSpec.IntValue ARTISAN_BOX_LINK_DISTANCE;
+    public static final ForgeConfigSpec.BooleanValue ARTISAN_HOTBARS_KEEP_ON_DEATH;
     public static final ForgeConfigSpec.BooleanValue DEBUG_LOGS;
 
     static {
@@ -142,6 +143,9 @@ public final class LimenCommonConfig {
         ARTISAN_BOX_LINK_DISTANCE = builder
                 .comment("Manhattan distance within which a bound artisan heart keeps its artisan box linked and held open.")
                 .defineInRange("artisanBoxLinkDistance", 10, 1, 256);
+        ARTISAN_HOTBARS_KEEP_ON_DEATH = builder
+                .comment("Keep the artisan heart's extra hotbar slots through death, even without keepInventory.")
+                .define("artisanHotbarsKeepOnDeath", false);
         builder.pop();
 
         builder.push("debug");

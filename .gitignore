@@ -22,7 +22,10 @@ run-data/
 
 # Temporary/reference material
 .tmp_goety2/
+.tmp_silkling/
 input/
+# 从原版 jar 里提取的对照图，Mojang 版权，只作本地比对用
+reference/
 
 # Docs（设计/需求/实现文档暂不上传）
 docs/

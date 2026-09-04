@@ -6,10 +6,14 @@ import com.moonlightc.limen.item.ChargedCoilArrowItem;
 import com.moonlightc.limen.item.ElectromagneticCrossbowItem;
 import com.moonlightc.limen.item.DeflectionShieldItem;
 import com.moonlightc.limen.item.LivingShieldItem;
+import com.moonlightc.limen.item.MarshmallowOnABlazeRodItem;
 import com.moonlightc.limen.item.PatchouliBookItem;
 import com.moonlightc.limen.item.PolearmCombatTechniquesItem;
 import com.moonlightc.limen.item.RoyalPolearmItem;
 import com.moonlightc.limen.item.StructureVoidBlockItem;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.BlockItem;
 import net.minecraftforge.common.ForgeSpawnEggItem;
@@ -108,12 +112,41 @@ public final class ModItems {
 
     public static final RegistryObject<Item> ARTISAN_HEART = ITEMS.register(
             "artisan_heart",
-            () -> new com.moonlightc.limen.item.ArtisanHeartItem(new Item.Properties().stacksTo(1))
+            () -> new com.moonlightc.limen.item.ArtisanHeartItem(new Item.Properties().stacksTo(1).fireResistant())
     );
 
     public static final RegistryObject<Item> CHAINSWORD = ITEMS.register(
             "chainsword",
             () -> new ChainswordItem(new Item.Properties())
+    );
+
+    /**
+     * Nutrition 2 with saturation modifier 0.3, eaten in 16 ticks and grantable on a full hunger bar.
+     *
+     * <p>{@code fast()} is what makes it 16 ticks: vanilla's {@code Item.getUseDuration} returns a flat
+     * 16 for fast food and 32 otherwise, with no way to name an arbitrary duration from
+     * {@code Properties}. The speed effect is supplied lazily so the registry object is resolved when
+     * the item is built rather than while this class is still loading.
+     */
+    public static final RegistryObject<Item> MARSHMALLOW = ITEMS.register(
+            "marshmallow",
+            () -> new Item(new Item.Properties().food(new FoodProperties.Builder()
+                    .nutrition(2)
+                    .saturationMod(0.3F)
+                    .fast()
+                    .alwaysEat()
+                    .effect(() -> new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 100, 0), 1.0F)
+                    .build()))
+    );
+
+    public static final RegistryObject<Item> MARSHMALLOW_ONASTICK = ITEMS.register(
+            "marshmallow_onastick",
+            () -> new Item(new Item.Properties().stacksTo(1))
+    );
+
+    public static final RegistryObject<Item> MARSHMALLOW_ONABLAZEROD = ITEMS.register(
+            "marshmallow_onablazerod",
+            () -> new MarshmallowOnABlazeRodItem(new Item.Properties().stacksTo(1))
     );
 
     public static final RegistryObject<Item> ELECTROMAGNETIC_CROSSBOW_BLUEPRINT = ITEMS.register(
