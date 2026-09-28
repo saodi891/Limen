@@ -42,31 +42,43 @@ public class ZombieChippedModel extends AbstractLimenGeoModel<ZombieChippedEntit
             bone.setRotX(baseRotX + finalHeadPitch);
         });
 
-        applyLegSwing("RightLeg", limbSwing, walkSpeed, walkAmplitude);
-        applyLegSwing("LeftLeg", limbSwing + Mth.PI, walkSpeed, walkAmplitude);
+        applyLegSwing("RightLeg", limbSwing, 0.0F, walkSpeed, walkAmplitude);
+        applyLegSwing("LeftLeg", limbSwing, Mth.PI, walkSpeed, walkAmplitude);
 
-        float armSwing = Mth.cos(limbSwing * walkSpeed) * 0.35F * limbSwingAmount;
-        float attackLift = animatable.isAggressive() ? 0.35F : 0.0F;
-
-        applyArmSwing("RightArm", -armSwing - attackLift);
-        applyArmSwing("LeftArm", armSwing - attackLift);
+        // Classic zombie arms: both held straight out forward, with a melee swing and idle sway,
+        // mirroring vanilla AnimationUtils.animateZombieArms so this reads like a normal zombie.
+        float ageInTicks = (float) animationState.getAnimationTick();
+        float attackTime = animatable.getAttackAnim(animationState.getPartialTick());
+        applyZombieArms(ageInTicks, attackTime);
     }
 
-    private void applyLegSwing(String boneName, float phase, float walkSpeed, float walkAmplitude) {
+    private void applyLegSwing(String boneName, float limbSwing, float phaseOffset, float walkSpeed, float walkAmplitude) {
         this.getBone(boneName).ifPresent(bone -> {
             float baseRotX = bone.getInitialSnapshot().getRotX();
-            bone.setRotX(baseRotX + Mth.cos(phase * walkSpeed) * walkAmplitude);
+            bone.setRotX(baseRotX + Mth.cos(limbSwing * walkSpeed + phaseOffset) * walkAmplitude);
         });
     }
 
-    private void applyArmSwing(String boneName, float deltaRotX) {
+    private void applyZombieArms(float ageInTicks, float attackTime) {
+        float f = Mth.sin(attackTime * Mth.PI);
+        float f1 = Mth.sin((1.0F - (1.0F - attackTime) * (1.0F - attackTime)) * Mth.PI);
+
+        // Arms already rest at -90 (straight out) in the geo, so these are deltas on top of that pose,
+        // matching vanilla AnimationUtils.animateZombieArms one-for-one.
+        float swing = -(f * 1.2F - f1 * 0.4F);          // melee windup + strike
+        float idleX = Mth.sin(ageInTicks * 0.067F) * 0.05F;
+        float idleZ = Mth.cos(ageInTicks * 0.09F) * 0.05F + 0.05F;
+        float yaw = f * 0.6F;                            // arms splay while striking
+
+        applyArmPose("RightArm", swing + idleX, -(0.1F - yaw), idleZ);
+        applyArmPose("LeftArm", swing - idleX, 0.1F - yaw, -idleZ);
+    }
+
+    private void applyArmPose(String boneName, float deltaRotX, float deltaRotY, float deltaRotZ) {
         this.getBone(boneName).ifPresent(bone -> {
-            float baseRotX = bone.getInitialSnapshot().getRotX();
-            float baseRotY = bone.getInitialSnapshot().getRotY();
-            float baseRotZ = bone.getInitialSnapshot().getRotZ();
-            bone.setRotX(baseRotX + deltaRotX);
-            bone.setRotY(baseRotY);
-            bone.setRotZ(baseRotZ);
+            bone.setRotX(bone.getInitialSnapshot().getRotX() + deltaRotX);
+            bone.setRotY(bone.getInitialSnapshot().getRotY() + deltaRotY);
+            bone.setRotZ(bone.getInitialSnapshot().getRotZ() + deltaRotZ);
         });
     }
 }

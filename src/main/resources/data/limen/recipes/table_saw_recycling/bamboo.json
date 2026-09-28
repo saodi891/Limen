@@ -1,0 +1,16 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": [
+    {
+      "item": "minecraft:bamboo_stairs"
+    },
+    {
+      "item": "minecraft:bamboo_fence"
+    }
+  ],
+  "input_count": 1,
+  "result": {
+    "item": "minecraft:bamboo_planks",
+    "count": 1
+  }
+}

@@ -20,19 +20,15 @@ public class AutonomousSpiderModel extends AbstractLimenGeoModel<AutonomousSpide
         super.setCustomAnimations(animatable, instanceId, animationState);
 
         float headYaw = 0.0F;
-        float headPitch = 0.0F;
         EntityModelData entityData = animationState.getData(DataTickets.ENTITY_MODEL_DATA);
         if (entityData != null) {
             headYaw = entityData.netHeadYaw() * Mth.DEG_TO_RAD;
-            headPitch = entityData.headPitch() * Mth.DEG_TO_RAD;
         }
 
+        // Yaw only: the head bone's pivot is offset, so any pitch swings the head cube off its
+        // socket. The spider just turns left/right, it never nods up/down.
         final float finalHeadYaw = headYaw;
-        final float finalHeadPitch = headPitch;
-        this.getBone("head").ifPresent(bone -> {
-            bone.setRotY(bone.getInitialSnapshot().getRotY() + finalHeadYaw);
-            bone.setRotX(bone.getInitialSnapshot().getRotX() + finalHeadPitch);
-        });
+        this.getBone("head").ifPresent(bone -> bone.setRotY(bone.getInitialSnapshot().getRotY() + finalHeadYaw));
 
         float limbSwing = animationState.getLimbSwing();
         float limbSwingAmount = Math.min(animationState.getLimbSwingAmount(), 1.0F);

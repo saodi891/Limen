@@ -1,0 +1,11 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": {
+    "item": "minecraft:bamboo_slab"
+  },
+  "input_count": 2,
+  "result": {
+    "item": "minecraft:bamboo_planks",
+    "count": 1
+  }
+}

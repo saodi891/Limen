@@ -1,0 +1,16 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": [
+    {
+      "item": "minecraft:jungle_stairs"
+    },
+    {
+      "item": "minecraft:jungle_fence"
+    }
+  ],
+  "input_count": 1,
+  "result": {
+    "item": "minecraft:jungle_planks",
+    "count": 1
+  }
+}

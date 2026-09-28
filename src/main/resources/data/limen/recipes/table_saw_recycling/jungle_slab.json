@@ -1,0 +1,11 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": {
+    "item": "minecraft:jungle_slab"
+  },
+  "input_count": 2,
+  "result": {
+    "item": "minecraft:jungle_planks",
+    "count": 1
+  }
+}

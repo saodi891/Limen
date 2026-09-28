@@ -1,0 +1,11 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": {
+    "item": "minecraft:warped_slab"
+  },
+  "input_count": 2,
+  "result": {
+    "item": "minecraft:warped_planks",
+    "count": 1
+  }
+}

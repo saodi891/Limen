@@ -7,6 +7,7 @@ import net.minecraft.world.entity.EntityType;
 
 public final class LimenEntityTypeTags {
     public static final TagKey<EntityType<?>> REDSTONE_MACHINES = TagKey.create(Registries.ENTITY_TYPE, Limen.id("redstone_machines"));
+    public static final TagKey<EntityType<?>> SPELL_CONSTRUCTS = TagKey.create(Registries.ENTITY_TYPE, Limen.id("spell_constructs"));
 
     private LimenEntityTypeTags() {
     }

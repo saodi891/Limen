@@ -12,9 +12,8 @@ public final class ModMobEffects {
     private static final DeferredRegister<MobEffect> MOB_EFFECTS = DeferredRegister.create(ForgeRegistries.MOB_EFFECTS, Limen.MODID);
 
     public static final RegistryObject<MobEffect> SHOCKED = MOB_EFFECTS.register(
-            "shocked",
-            () -> new MobEffect(MobEffectCategory.HARMFUL, 0x6B0F16) {
-            }
+            "electricshock",
+            () -> new com.moonlightc.limen.effect.ShockedMobEffect(0x6B0F16)
     );
 
     public static final RegistryObject<MobEffect> OVERCLOCK = MOB_EFFECTS.register(

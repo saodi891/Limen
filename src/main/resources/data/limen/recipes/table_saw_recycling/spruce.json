@@ -1,0 +1,16 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": [
+    {
+      "item": "minecraft:spruce_stairs"
+    },
+    {
+      "item": "minecraft:spruce_fence"
+    }
+  ],
+  "input_count": 1,
+  "result": {
+    "item": "minecraft:spruce_planks",
+    "count": 1
+  }
+}

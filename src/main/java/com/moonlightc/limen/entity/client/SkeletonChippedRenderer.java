@@ -12,6 +12,13 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
 import software.bernie.geckolib.renderer.layer.BlockAndItemGeoLayer;
 
 public class SkeletonChippedRenderer extends GeoEntityRenderer<SkeletonChippedEntity> {
+    // Tune the held-bow angle here. The vanilla bow's thirdperson transform is authored for the vanilla
+    // arm, so it needs correcting for this rig. Z stands the bow upright (fixes it lying flat), X tilts
+    // it forward/back, Y swings it left/right. Adjust these three until it sits right in the hand.
+    private static final float BOW_ROT_X_DEG = 0.0F;
+    private static final float BOW_ROT_Y_DEG = 0.0F;
+    private static final float BOW_ROT_Z_DEG = 90.0F;
+
     public SkeletonChippedRenderer(EntityRendererProvider.Context renderManager) {
         super(renderManager, new SkeletonChippedModel());
         this.shadowRadius = 0.5F;
@@ -40,9 +47,10 @@ public class SkeletonChippedRenderer extends GeoEntityRenderer<SkeletonChippedEn
                 poseStack.pushPose();
 
                 if ("rightItem".equals(bone.getName())) {
-                    // Let the item's own THIRD_PERSON_RIGHT_HAND display transform position it, the
-                    // same way a vanilla skeleton holds a bow (upright in the hand). No extra manual
-                    // rotation, which is what previously laid the bow flat.
+                    // Correct the vanilla bow's orientation for this rig, then nudge it into the palm.
+                    poseStack.mulPose(Axis.ZP.rotationDegrees(BOW_ROT_Z_DEG));
+                    poseStack.mulPose(Axis.YP.rotationDegrees(BOW_ROT_Y_DEG));
+                    poseStack.mulPose(Axis.XP.rotationDegrees(BOW_ROT_X_DEG));
                     poseStack.translate(-0.05D, 0.08D, -0.02D);
                     poseStack.scale(0.9F, 0.9F, 0.9F);
                 } else if ("leftItem".equals(bone.getName())) {

@@ -2,7 +2,9 @@ package com.moonlightc.limen.event;
 
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.entity.monster.AutonomousSpiderEntity;
+import com.moonlightc.limen.entity.monster.EniacEntity;
 import com.moonlightc.limen.entity.monster.PamaDetectorEntity;
+import com.moonlightc.limen.entity.monster.SilkBabyEntity;
 import com.moonlightc.limen.entity.monster.SkeletonChippedEntity;
 import com.moonlightc.limen.entity.monster.ZombieChippedEntity;
 import com.moonlightc.limen.registry.ModEntities;
@@ -18,6 +20,8 @@ public final class ModEntityEvents {
     @SubscribeEvent
     public static void registerAttributes(EntityAttributeCreationEvent event) {
         event.put(ModEntities.AUTONOMOUS_SPIDER.get(), AutonomousSpiderEntity.createAttributes().build());
+        event.put(ModEntities.SILK_BABY.get(), SilkBabyEntity.createAttributes().build());
+        event.put(ModEntities.ENIAC.get(), EniacEntity.createAttributes().build());
         event.put(ModEntities.PAMA_DETECTOR.get(), PamaDetectorEntity.createAttributes().build());
         event.put(ModEntities.SKELETON_CHIPPED.get(), SkeletonChippedEntity.createAttributes().build());
         event.put(ModEntities.ZOMBIE_CHIPPED.get(), ZombieChippedEntity.createAttributes().build());

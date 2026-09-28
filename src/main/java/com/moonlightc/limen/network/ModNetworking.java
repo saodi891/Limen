@@ -55,5 +55,10 @@ public final class ModNetworking {
                 .encoder(ArtisanBoxSwapPacket::encode)
                 .consumerMainThread(ArtisanBoxSwapPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(PamaTridentImpactPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(PamaTridentImpactPacket::decode)
+                .encoder(PamaTridentImpactPacket::encode)
+                .consumerMainThread(PamaTridentImpactPacket::handle)
+                .add();
     }
 }

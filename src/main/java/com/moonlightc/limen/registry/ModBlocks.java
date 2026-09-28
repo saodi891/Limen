@@ -3,10 +3,12 @@ package com.moonlightc.limen.registry;
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.block.ArtisanBoxBlock;
 import com.moonlightc.limen.block.StructureVoidBlock;
+import com.moonlightc.limen.block.TableSawBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -39,6 +41,12 @@ public final class ModBlocks {
                     .sound(SoundType.METAL)
                     .noOcclusion()
                     .dynamicShape())
+    );
+
+    public static final RegistryObject<Block> TABLE_SAW = BLOCKS.register(
+            "table_saw",
+            () -> new TableSawBlock(BlockBehaviour.Properties.copy(Blocks.STONECUTTER)
+                    .pushReaction(PushReaction.NORMAL))
     );
 
     private ModBlocks() {

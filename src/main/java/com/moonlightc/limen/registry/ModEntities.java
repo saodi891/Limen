@@ -2,11 +2,16 @@ package com.moonlightc.limen.registry;
 
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.entity.monster.AutonomousSpiderEntity;
+import com.moonlightc.limen.entity.monster.EniacEntity;
 import com.moonlightc.limen.entity.monster.PamaDetectorEntity;
+import com.moonlightc.limen.entity.monster.SilkBabyEntity;
 import com.moonlightc.limen.entity.monster.SkeletonChippedEntity;
 import com.moonlightc.limen.entity.monster.ZombieChippedEntity;
+import com.moonlightc.limen.entity.misc.TotemOfRelinkEntity;
 import com.moonlightc.limen.entity.projectile.ChargedCoilArrowEntity;
 import com.moonlightc.limen.entity.projectile.CoilFieldEntity;
+import com.moonlightc.limen.entity.projectile.PamaEnderPearlEntity;
+import com.moonlightc.limen.entity.projectile.PamaTridentEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -34,6 +39,24 @@ public final class ModEntities {
                     .build(Limen.id("charged_coil_arrow").toString())
     );
 
+    public static final RegistryObject<EntityType<PamaTridentEntity>> PAMA_TRIDENT = ENTITIES.register(
+            "pama_trident",
+            () -> EntityType.Builder.<PamaTridentEntity>of(PamaTridentEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .clientTrackingRange(4)
+                    .updateInterval(1)
+                    .build(Limen.id("pama_trident").toString())
+    );
+
+    public static final RegistryObject<EntityType<PamaEnderPearlEntity>> PAMA_ENDER_PEARL = ENTITIES.register(
+            "pama_ender_pearl",
+            () -> EntityType.Builder.<PamaEnderPearlEntity>of(PamaEnderPearlEntity::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .clientTrackingRange(4)
+                    .updateInterval(10)
+                    .build(Limen.id("pama_ender_pearl").toString())
+    );
+
     public static final RegistryObject<EntityType<CoilFieldEntity>> COIL_FIELD = ENTITIES.register(
             "coil_field",
             () -> EntityType.Builder.<CoilFieldEntity>of(CoilFieldEntity::new, MobCategory.MISC)
@@ -51,6 +74,22 @@ public final class ModEntities {
                     .build(Limen.id("autonomous_spider").toString())
     );
 
+    public static final RegistryObject<EntityType<SilkBabyEntity>> SILK_BABY = ENTITIES.register(
+            "silk_baby",
+            () -> EntityType.Builder.of(SilkBabyEntity::new, MobCategory.MONSTER)
+                    .sized(0.9F, 0.6F)
+                    .clientTrackingRange(8)
+                    .build(Limen.id("silk_baby").toString())
+    );
+
+    public static final RegistryObject<EntityType<EniacEntity>> ENIAC = ENTITIES.register(
+            "eniac",
+            () -> EntityType.Builder.of(EniacEntity::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.8F)
+                    .clientTrackingRange(8)
+                    .build(Limen.id("eniac").toString())
+    );
+
     public static final RegistryObject<EntityType<ZombieChippedEntity>> ZOMBIE_CHIPPED = ENTITIES.register(
             "zombie_chipped",
             () -> EntityType.Builder.of(ZombieChippedEntity::new, MobCategory.MONSTER)
@@ -65,6 +104,15 @@ public final class ModEntities {
                     .sized(0.6F, 1.99F)
                     .clientTrackingRange(8)
                     .build(Limen.id("skeleton_chipped").toString())
+    );
+
+    public static final RegistryObject<EntityType<TotemOfRelinkEntity>> TOTEM_OF_RELINK = ENTITIES.register(
+            "totem_of_relink",
+            () -> EntityType.Builder.<TotemOfRelinkEntity>of(TotemOfRelinkEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 1.0F)
+                    .clientTrackingRange(8)
+                    .updateInterval(1)
+                    .build(Limen.id("totem_of_relink").toString())
     );
 
     private ModEntities() {

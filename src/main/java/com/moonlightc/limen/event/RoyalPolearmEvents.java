@@ -2,6 +2,7 @@ package com.moonlightc.limen.event;
 
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.registry.ModItems;
+import com.moonlightc.limen.registry.ModMobEffects;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
@@ -9,6 +10,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.stats.Stats;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -48,8 +50,14 @@ public final class RoyalPolearmEvents {
     private static final double CHARGE_DISMOUNT_SPEED = 7.5D / TICKS_PER_SECOND;
     private static final float CHARGE_KNOCKBACK_STRENGTH = 1.15F;
     private static final float STAB_DAMAGE = 9.0F;
+    private static final float POWERED_SHOCK_DAMAGE_THRESHOLD = 5.0F;
+    private static final int POWERED_SHOCK_TICKS = 3 * 20;
 
     private RoyalPolearmEvents() {
+    }
+
+    private static boolean isPolearm(ItemStack stack) {
+        return stack.is(ModItems.ROYAL_POLEARM.get()) || stack.is(ModItems.POWERED_POLEARM.get());
     }
 
     @SubscribeEvent
@@ -60,7 +68,7 @@ public final class RoyalPolearmEvents {
         }
 
         ItemStack stack = player.getMainHandItem();
-        if (!stack.is(ModItems.ROYAL_POLEARM.get())) {
+        if (!isPolearm(stack)) {
             return;
         }
 
@@ -77,7 +85,7 @@ public final class RoyalPolearmEvents {
         for (LivingEntity target : targets) {
             if (applyStabHit(player, target, stack)) {
                 if (player instanceof ServerPlayer serverPlayer) {
-                    serverPlayer.awardStat(Stats.ITEM_USED.get(ModItems.ROYAL_POLEARM.get()));
+                    serverPlayer.awardStat(Stats.ITEM_USED.get(stack.getItem()));
                 }
             }
         }
@@ -98,7 +106,7 @@ public final class RoyalPolearmEvents {
             return;
         }
 
-        if (!player.isUsingItem() || !player.getUseItem().is(ModItems.ROYAL_POLEARM.get())) {
+        if (!player.isUsingItem() || !isPolearm(player.getUseItem())) {
             clearChargeState(player);
             return;
         }
@@ -139,7 +147,7 @@ public final class RoyalPolearmEvents {
         player.level().playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.PLAYER_ATTACK_KNOCKBACK, player.getSoundSource(), 0.9F, 0.95F);
 
         if (player instanceof ServerPlayer serverPlayer) {
-            serverPlayer.awardStat(Stats.ITEM_USED.get(ModItems.ROYAL_POLEARM.get()));
+            serverPlayer.awardStat(Stats.ITEM_USED.get(stack.getItem()));
         }
     }
 
@@ -164,6 +172,9 @@ public final class RoyalPolearmEvents {
 
         float damage = Math.max(1.0F, Mth.ceil(Math.max(attackerSpeed, relativeSpeed) * TICKS_PER_SECOND));
         boolean harmed = hurtWithPolearm(player, target, damage);
+        if (harmed) {
+            maybeApplyElectricShock(target, stack, damage);
+        }
 
         target.stopRiding();
         if (attackerSpeed > CHARGE_KNOCKBACK_SPEED) {
@@ -196,6 +207,12 @@ public final class RoyalPolearmEvents {
         EnchantmentHelper.doPostHurtEffects(target, player);
         EnchantmentHelper.doPostDamageEffects(player, target);
         return true;
+    }
+
+    private static void maybeApplyElectricShock(LivingEntity target, ItemStack stack, float damage) {
+        if (stack.is(ModItems.POWERED_POLEARM.get()) && damage >= POWERED_SHOCK_DAMAGE_THRESHOLD) {
+            target.addEffect(new MobEffectInstance(ModMobEffects.SHOCKED.get(), POWERED_SHOCK_TICKS, 0, false, true));
+        }
     }
 
     private static List<LivingEntity> findPolearmTargets(Player player, double startDistance, double endDistance, double boxExpansion) {

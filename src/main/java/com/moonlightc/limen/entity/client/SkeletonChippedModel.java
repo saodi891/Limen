@@ -40,8 +40,8 @@ public class SkeletonChippedModel extends AbstractLimenGeoModel<SkeletonChippedE
         float walkSpeed = 0.6662F;
         float walkAmplitude = 1.4F * limbSwingAmount;
 
-        applyLegSwing("RightLeg", limbSwing, walkSpeed, walkAmplitude);
-        applyLegSwing("LeftLeg", limbSwing + Mth.PI, walkSpeed, walkAmplitude);
+        applyLegSwing("RightLeg", limbSwing, 0.0F, walkSpeed, walkAmplitude);
+        applyLegSwing("LeftLeg", limbSwing, Mth.PI, walkSpeed, walkAmplitude);
 
         boolean bowPose = animatable.getMainHandItem().is(Items.BOW) && animatable.isAggressive();
         if (bowPose) {
@@ -71,8 +71,8 @@ public class SkeletonChippedModel extends AbstractLimenGeoModel<SkeletonChippedE
         });
     }
 
-    private void applyLegSwing(String boneName, float phase, float walkSpeed, float walkAmplitude) {
-        this.getBone(boneName).ifPresent(bone -> bone.setRotX(bone.getInitialSnapshot().getRotX() + Mth.cos(phase * walkSpeed) * walkAmplitude));
+    private void applyLegSwing(String boneName, float limbSwing, float phaseOffset, float walkSpeed, float walkAmplitude) {
+        this.getBone(boneName).ifPresent(bone -> bone.setRotX(bone.getInitialSnapshot().getRotX() + Mth.cos(limbSwing * walkSpeed + phaseOffset) * walkAmplitude));
     }
 
     private void applyArmSwing(String boneName, float deltaRotX) {

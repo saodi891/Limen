@@ -12,7 +12,7 @@ import net.minecraft.world.item.ItemStack;
  * "affected by fireproofing" part of the requirement needs no code of its own.
  */
 public class MarshmallowOnABlazeRodItem extends Item {
-    private static final int BURN_SECONDS = 2;
+    static final int BURN_SECONDS = 2;
 
     public MarshmallowOnABlazeRodItem(Properties properties) {
         super(properties);

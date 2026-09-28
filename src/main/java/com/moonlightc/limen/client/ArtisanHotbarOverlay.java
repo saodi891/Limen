@@ -34,9 +34,9 @@ public final class ArtisanHotbarOverlay {
      */
     private static final ResourceLocation TEXTURE = Limen.id("textures/gui/artisan_hotbar.png");
     /** Vanilla's own sheet, for the replacement hotbar drawn when an artisan slot is selected. */
-    private static final ResourceLocation VANILLA_WIDGETS = new ResourceLocation("textures/gui/widgets.png");
+    private static final ResourceLocation VANILLA_WIDGETS = ResourceLocation.withDefaultNamespace("textures/gui/widgets.png");
     /** Vanilla's icon sheet, for the attack-strength indicator the replacement hotbar has to redraw. */
-    private static final ResourceLocation VANILLA_ICONS = new ResourceLocation("textures/gui/icons.png");
+    private static final ResourceLocation VANILLA_ICONS = ResourceLocation.withDefaultNamespace("textures/gui/icons.png");
 
     private static final int BAR_WIDTH = 182;
     private static final int BAR_HEIGHT = 22;

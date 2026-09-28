@@ -3,7 +3,9 @@ package com.moonlightc.limen.event;
 import com.moonlightc.limen.entity.client.AutonomousSpiderRenderer;
 import com.moonlightc.limen.entity.client.ChargedCoilArrowRenderer;
 import com.moonlightc.limen.entity.client.CoilFieldRenderer;
+import com.moonlightc.limen.entity.client.EniacRenderer;
 import com.moonlightc.limen.entity.client.PamaDetectorRenderer;
+import com.moonlightc.limen.entity.client.SilkBabyRenderer;
 import com.moonlightc.limen.entity.client.SkeletonChippedRenderer;
 import com.moonlightc.limen.entity.client.ZombieChippedRenderer;
 import com.moonlightc.limen.item.LivingShieldItem;
@@ -31,11 +33,18 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.CHARGED_COIL_ARROW.get(), ChargedCoilArrowRenderer::new);
+        event.registerEntityRenderer(ModEntities.PAMA_TRIDENT.get(), com.moonlightc.limen.entity.client.PamaTridentRenderer::new);
+        event.registerEntityRenderer(ModEntities.PAMA_ENDER_PEARL.get(),
+                net.minecraft.client.renderer.entity.ThrownItemRenderer::new);
         event.registerEntityRenderer(ModEntities.COIL_FIELD.get(), CoilFieldRenderer::new);
         event.registerEntityRenderer(ModEntities.PAMA_DETECTOR.get(), PamaDetectorRenderer::new);
         event.registerEntityRenderer(ModEntities.AUTONOMOUS_SPIDER.get(), AutonomousSpiderRenderer::new);
+        event.registerEntityRenderer(ModEntities.SILK_BABY.get(), SilkBabyRenderer::new);
+        event.registerEntityRenderer(ModEntities.ENIAC.get(), EniacRenderer::new);
         event.registerEntityRenderer(ModEntities.SKELETON_CHIPPED.get(), SkeletonChippedRenderer::new);
         event.registerEntityRenderer(ModEntities.ZOMBIE_CHIPPED.get(), ZombieChippedRenderer::new);
+        event.registerEntityRenderer(ModEntities.TOTEM_OF_RELINK.get(),
+                com.moonlightc.limen.entity.client.TotemOfRelinkRenderer::new);
         event.registerBlockEntityRenderer(com.moonlightc.limen.registry.ModBlockEntities.ARTISAN_BOX.get(),
                 context -> new com.moonlightc.limen.entity.client.ArtisanBoxRenderer());
     }
@@ -47,6 +56,12 @@ public final class ClientModEvents {
             net.minecraft.client.gui.screens.MenuScreens.register(
                     com.moonlightc.limen.registry.ModMenuTypes.ARTISAN_BOX.get(),
                     com.moonlightc.limen.client.gui.ArtisanBoxScreen::new);
+            net.minecraft.client.gui.screens.MenuScreens.register(
+                    com.moonlightc.limen.registry.ModMenuTypes.CAMPFIRE.get(),
+                    com.moonlightc.limen.client.gui.CampfireScreen::new);
+            net.minecraft.client.gui.screens.MenuScreens.register(
+                    com.moonlightc.limen.registry.ModMenuTypes.TABLE_SAW.get(),
+                    com.moonlightc.limen.client.gui.TableSawScreen::new);
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.STRUCTURE_VOID_BLOCK.get(), RenderType.cutout());
             ItemProperties.register(ModItems.ELECTROMAGNETIC_CROSSBOW.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "pull"),
                     (stack, level, entity, seed) -> getPull(stack, level, entity));

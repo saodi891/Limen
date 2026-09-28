@@ -1,0 +1,11 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": {
+    "item": "minecraft:mangrove_slab"
+  },
+  "input_count": 2,
+  "result": {
+    "item": "minecraft:mangrove_planks",
+    "count": 1
+  }
+}

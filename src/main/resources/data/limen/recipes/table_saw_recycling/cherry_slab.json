@@ -1,0 +1,11 @@
+{
+  "type": "limen:table_saw_recycling",
+  "ingredient": {
+    "item": "minecraft:cherry_slab"
+  },
+  "input_count": 2,
+  "result": {
+    "item": "minecraft:cherry_planks",
+    "count": 1
+  }
+}
