@@ -74,9 +74,9 @@ public final class EniacEntity extends Monster implements GeoEntity {
     private static final int SKILL_A_COOLDOWN_TICKS = 30 * 20;
     // Give up the melee chase after 10s and finish the skill with the ranged trident throw instead.
     private static final int SKILL_A_CHASE_TIMEOUT_TICKS = 10 * 20;
-    // skillAattack is 0.7s (14 ticks); the launch lands mid-swing.
+    // The axe launch fires the instant skillAattack starts; this is how long ENIAC then holds the pose.
     private static final int SKILL_A_STRIKE_DELAY_TICKS = 7;
-    // Windup after the melee launch before the bow phase fires the trident.
+    // The trident leaves the instant the throw animation starts; this is how long ENIAC then holds the pose.
     private static final int SKILL_A_BOW_DELAY_TICKS = 10;
     // Iron-golem-style upward fling; strong enough that the target is thrown well clear of the ground.
     private static final double SKILL_A_LAUNCH = 2.0D;
@@ -126,9 +126,10 @@ public final class EniacEntity extends Monster implements GeoEntity {
     // How fast the body/head swing to square up on the aggro target, in degrees per tick.
     private static final float BODY_TURN_DEGREES_PER_TICK = 30.0F;
 
-    // Phase-1 skillC: switches to the powered polearm and dashes at the highest-health enemy five times,
-    // approaching at a Speed-II-equivalent pace (no actual potion). A shield-blocked strike makes ENIAC halt
-    // and break the shield with an axe before resuming.
+    // Phase-1 skillC: switches to the powered polearm and dashes at the highest-health enemy five times.
+    // Each dash is a velocity-driven charge that accelerates from ENIAC's run pace up to 3x, deals powered-
+    // polearm charge-style (speed-scaled) damage on contact, then charges THROUGH and decelerates instead of
+    // stopping. A shield-blocked strike is the only thing that halts it, to break the shield with an axe.
     private static final int SKILL_C_COOLDOWN_TICKS = 30 * 20;
     private static final int SKILL_C_DASH_COUNT = 5;
     // skillC1 windup: ENIAC stands still and locks onto the highest-health target before each dash.
@@ -137,10 +138,17 @@ public final class EniacEntity extends Monster implements GeoEntity {
     private static final int SKILL_C_APPROACH_TIMEOUT_TICKS = 100;
     // Pause on a shield-blocked strike while the axe breaks the shield.
     private static final int SKILL_C_SHIELD_BREAK_TICKS = 10;
-    // Speed-II-equivalent movement modelled as a transient MOVEMENT_SPEED modifier (Speed II = +0.4 total).
-    private static final UUID SKILL_C_SPEED_UUID = UUID.fromString("6f3a1b2c-8d4e-4a5f-9b7c-1e2d3f4a5b6c");
-    private static final AttributeModifier SKILL_C_SPEED_MODIFIER = new AttributeModifier(
-            SKILL_C_SPEED_UUID, "skillC dash speed", 0.4D, AttributeModifier.Operation.MULTIPLY_TOTAL);
+    // Charge tuning (blocks/tick). ENIAC starts a dash at its run pace and ramps the multiplier up to the cap,
+    // then bleeds it back down through the follow-through so it coasts past the target.
+    private static final double SKILL_C_CHARGE_BASE_SPEED = 0.35D;
+    private static final double SKILL_C_CHARGE_MAX_MULTIPLIER = 3.0D;
+    private static final double SKILL_C_CHARGE_ACCEL_PER_TICK = 0.15D;
+    private static final double SKILL_C_CHARGE_DECEL_PER_TICK = 0.18D;
+    // End the follow-through (and the dash) once deceleration drops the charge below this multiple of run pace.
+    private static final double SKILL_C_FOLLOW_THROUGH_MIN_MULTIPLIER = 0.5D;
+    // Mirror of RoyalPolearmEvents charge knockback: directional knockback above this speed, this strength.
+    private static final double SKILL_C_CHARGE_KNOCKBACK_SPEED = 5.1D / 20.0D;
+    private static final float SKILL_C_CHARGE_KNOCKBACK_STRENGTH = 1.15F;
     // skillA dash speed as a transient modifier (Speed-II-equivalent) instead of a potion effect.
     private static final UUID SKILL_A_SPEED_UUID = UUID.fromString("2c9d7e14-3f5b-4a6c-8d1e-7b9f0a2c4d6e");
     private static final AttributeModifier SKILL_A_SPEED_MODIFIER = new AttributeModifier(
@@ -667,21 +675,6 @@ public final class EniacEntity extends Monster implements GeoEntity {
         this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.POWERED_POLEARM.get()));
     }
 
-    /** skillC dash speed: a transient Speed-II-equivalent MOVEMENT_SPEED modifier (no potion effect). */
-    private void applySkillCSpeed() {
-        var attribute = this.getAttribute(Attributes.MOVEMENT_SPEED);
-        if (attribute != null && !attribute.hasModifier(SKILL_C_SPEED_MODIFIER)) {
-            attribute.addTransientModifier(SKILL_C_SPEED_MODIFIER);
-        }
-    }
-
-    private void removeSkillCSpeed() {
-        var attribute = this.getAttribute(Attributes.MOVEMENT_SPEED);
-        if (attribute != null) {
-            attribute.removeModifier(SKILL_C_SPEED_UUID);
-        }
-    }
-
     /** skillA dash speed: a transient Speed-II-equivalent MOVEMENT_SPEED modifier (no potion effect). */
     private void applySkillASpeed() {
         var attribute = this.getAttribute(Attributes.MOVEMENT_SPEED);
@@ -1056,6 +1049,8 @@ public final class EniacEntity extends Monster implements GeoEntity {
                         this.eniac.setSkillARunning(false);
                         this.eniac.getNavigation().stop();
                         this.eniac.triggerAnim("actions", "skillAattack");
+                        // Fling the target the instant the swing starts, not at the end of the animation.
+                        this.eniac.performSkillALaunch(this.target);
                         this.timer = SKILL_A_STRIKE_DELAY_TICKS;
                         this.phase = PHASE_STRIKE;
                     } else if (++this.timer >= SKILL_A_CHASE_TIMEOUT_TICKS) {
@@ -1066,14 +1061,12 @@ public final class EniacEntity extends Monster implements GeoEntity {
                 case PHASE_STRIKE -> {
                     this.freeze();
                     if (--this.timer <= 0) {
-                        this.eniac.performSkillALaunch(this.target);
                         this.beginBowThrow();
                     }
                 }
                 case PHASE_BOW -> {
                     this.freeze();
                     if (--this.timer <= 0) {
-                        this.eniac.fireSkillATrident(this.target);
                         this.phase = PHASE_DONE;
                     }
                 }
@@ -1082,12 +1075,14 @@ public final class EniacEntity extends Monster implements GeoEntity {
             }
         }
 
-        /** Ends the chase/strike beat: swaps to the shock bow and winds up the ranged trident throw. */
+        /** Ends the chase/strike beat: swaps to the shock bow and releases the trident as the throw begins. */
         private void beginBowThrow() {
             this.eniac.setSkillARunning(false);
             this.eniac.getNavigation().stop();
             this.eniac.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.PAMA_BOW.get()));
             this.eniac.triggerAnim("actions", "attack");
+            // Trident leaves the hand the instant the throw animation starts, not when it finishes.
+            this.eniac.fireSkillATrident(this.target);
             this.timer = SKILL_A_BOW_DELAY_TICKS;
             this.phase = PHASE_BOW;
         }
@@ -1276,14 +1271,16 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
     /**
      * Phase-1 skillC: 30s cooldown. ENIAC equips the powered polearm, plays skillC1 while standing still to
-     * lock onto the highest-health enemy, then plays walk2 and closes at a Speed-II-equivalent pace (a
-     * transient MOVEMENT_SPEED modifier, not a potion). It re-selects the highest-health target before each of
-     * five dashes. If a strike is caught on a shield it halts, swaps to an axe to break the shield, then
-     * resumes. After the fifth dash the skill ends.
+     * lock onto the highest-health enemy, then plays walk2 and charges. Each of the five dashes is a
+     * velocity-driven charge that accelerates from ENIAC's run pace up to {@link #SKILL_C_CHARGE_MAX_MULTIPLIER}x,
+     * deals powered-polearm charge-style (speed-scaled) damage plus directional knockback on contact, then
+     * charges THROUGH the target and decelerates rather than stopping — leaving run-up room for the next dash.
+     * If a strike is caught on a shield it halts, swaps to an axe to break the shield, then resumes. After the
+     * fifth dash the skill ends.
      */
     private static final class SkillCGoal extends Goal {
         private static final int PHASE_LOCK = 0;
-        private static final int PHASE_APPROACH = 1;
+        private static final int PHASE_CHARGE = 1;
         private static final int PHASE_SHIELD_BREAK = 2;
         private static final int PHASE_DONE = 3;
 
@@ -1292,6 +1289,12 @@ public final class EniacEntity extends Monster implements GeoEntity {
         private int dashesRemaining;
         private int phase;
         private int timer;
+        // Horizontal charge heading. It tracks the target while closing in, then freezes on the hit so ENIAC
+        // charges straight through instead of curving back onto a target it just knocked aside.
+        private double chargeDirX;
+        private double chargeDirZ;
+        private double chargeMultiplier;
+        private boolean struck;
 
         private SkillCGoal(EniacEntity eniac) {
             this.eniac = eniac;
@@ -1319,7 +1322,6 @@ public final class EniacEntity extends Monster implements GeoEntity {
             this.eniac.skillCCooldown = SKILL_C_COOLDOWN_TICKS;
             this.eniac.setSkillCRunning(true);
             this.eniac.equipPoweredPolearm();
-            this.eniac.applySkillCSpeed();
             this.dashesRemaining = SKILL_C_DASH_COUNT;
             this.beginLock();
         }
@@ -1330,6 +1332,8 @@ public final class EniacEntity extends Monster implements GeoEntity {
             this.eniac.getNavigation().stop();
             this.phase = PHASE_LOCK;
             this.timer = SKILL_C_LOCK_TICKS;
+            this.struck = false;
+            this.chargeMultiplier = 1.0D;
         }
 
         @Override
@@ -1348,20 +1352,11 @@ public final class EniacEntity extends Monster implements GeoEntity {
                     this.freeze();
                     this.eniac.setTarget(this.target);
                     if (--this.timer <= 0) {
-                        this.eniac.getNavigation().moveTo(this.target, WALK_SPEED_MODIFIER);
                         this.timer = SKILL_C_APPROACH_TIMEOUT_TICKS;
-                        this.phase = PHASE_APPROACH;
+                        this.phase = PHASE_CHARGE;
                     }
                 }
-                case PHASE_APPROACH -> {
-                    this.eniac.getNavigation().moveTo(this.target, WALK_SPEED_MODIFIER);
-                    if (this.eniac.distanceToSqr(this.target) <= this.eniac.getPlayerReachSqr(this.target)) {
-                        this.strike();
-                    } else if (--this.timer <= 0) {
-                        // Couldn't reach the target in time; spend this dash and re-lock.
-                        this.finishDash();
-                    }
-                }
+                case PHASE_CHARGE -> this.charge();
                 case PHASE_SHIELD_BREAK -> {
                     this.freeze();
                     if (--this.timer <= 0) {
@@ -1375,22 +1370,79 @@ public final class EniacEntity extends Monster implements GeoEntity {
             }
         }
 
-        /** Land the polearm hit, or halt to break a raised shield with the axe first. */
+        /**
+         * Velocity-driven charge. Before the hit ENIAC steers toward the target and accelerates up to
+         * {@link #SKILL_C_CHARGE_MAX_MULTIPLIER}x its run pace; on contact it deals charge-style damage and
+         * keeps its heading; afterwards it decelerates and coasts through until the charge dies down, then
+         * re-locks for the next dash. A shield-blocked hit halts it into the shield-break phase instead.
+         */
+        private void charge() {
+            if (!this.struck) {
+                double dx = this.target.getX() - this.eniac.getX();
+                double dz = this.target.getZ() - this.eniac.getZ();
+                double horiz = Math.sqrt(dx * dx + dz * dz);
+                if (horiz > 1.0E-4D) {
+                    this.chargeDirX = dx / horiz;
+                    this.chargeDirZ = dz / horiz;
+                }
+                this.chargeMultiplier = Math.min(SKILL_C_CHARGE_MAX_MULTIPLIER,
+                        this.chargeMultiplier + SKILL_C_CHARGE_ACCEL_PER_TICK);
+                this.drive();
+                if (this.eniac.distanceToSqr(this.target) <= this.eniac.getPlayerReachSqr(this.target)) {
+                    this.strike();
+                } else if (this.eniac.horizontalCollision || --this.timer <= 0) {
+                    // Wall or timeout before reaching the target; spend this dash and re-lock.
+                    this.finishDash();
+                }
+                return;
+            }
+
+            // Follow-through: keep the locked heading and bleed off speed so ENIAC coasts past the target.
+            this.chargeMultiplier -= SKILL_C_CHARGE_DECEL_PER_TICK;
+            if (this.chargeMultiplier <= SKILL_C_FOLLOW_THROUGH_MIN_MULTIPLIER || this.eniac.horizontalCollision) {
+                this.finishDash();
+                return;
+            }
+            this.drive();
+        }
+
+        /** Push ENIAC along the locked charge heading at the current multiple of its run pace. */
+        private void drive() {
+            double speed = SKILL_C_CHARGE_BASE_SPEED * this.chargeMultiplier;
+            this.eniac.setDeltaMovement(this.chargeDirX * speed,
+                    this.eniac.getDeltaMovement().y, this.chargeDirZ * speed);
+            this.eniac.hasImpulse = true;
+        }
+
+        /** Land the charge hit (speed-scaled damage + directional knockback), or halt to break a raised shield. */
         private void strike() {
-            this.eniac.getNavigation().stop();
-            this.freeze();
             DamageSource source = this.eniac.damageSources().mobAttack(this.eniac);
             if (this.target instanceof Player player && player.isBlocking()
                     && player.isDamageSourceBlocked(source)) {
+                this.eniac.getNavigation().stop();
+                this.freeze();
                 this.eniac.triggerAnim("actions", "skillAattack");
                 this.eniac.equipSkillCAxe();
                 this.timer = SKILL_C_SHIELD_BREAK_TICKS;
                 this.phase = PHASE_SHIELD_BREAK;
                 return;
             }
+
+            // Mirror RoyalPolearmEvents#applyChargeHit: damage scales with charge speed; knockback runs along the heading.
+            Vec3 delta = this.eniac.getDeltaMovement();
+            Vec3 targetDelta = this.target.getDeltaMovement();
+            double attackerSpeed = delta.x * this.chargeDirX + delta.z * this.chargeDirZ;
+            double relativeSpeed = Math.abs((delta.x - targetDelta.x) * this.chargeDirX
+                    + (delta.z - targetDelta.z) * this.chargeDirZ);
+            float damage = Math.max(1.0F, (float) Math.ceil(Math.max(attackerSpeed, relativeSpeed) * 20.0D));
             this.eniac.triggerAnim("actions", "attack");
-            this.eniac.doHurtTarget(this.target);
-            this.finishDash();
+            boolean harmed = this.target.hurt(source, damage);
+            if (harmed && attackerSpeed > SKILL_C_CHARGE_KNOCKBACK_SPEED) {
+                this.target.knockback(SKILL_C_CHARGE_KNOCKBACK_STRENGTH, -this.chargeDirX, -this.chargeDirZ);
+                this.target.hurtMarked = true;
+            }
+            // Do not stop: keep the heading and let the follow-through coast ENIAC through the target.
+            this.struck = true;
         }
 
         private void finishDash() {
@@ -1409,13 +1461,13 @@ public final class EniacEntity extends Monster implements GeoEntity {
         @Override
         public void stop() {
             this.eniac.setSkillCRunning(false);
-            this.eniac.removeSkillCSpeed();
             this.eniac.getNavigation().stop();
             this.eniac.equipBaseWeapon();
             this.target = null;
             this.dashesRemaining = 0;
             this.phase = PHASE_DONE;
             this.timer = 0;
+            this.struck = false;
         }
     }
 }

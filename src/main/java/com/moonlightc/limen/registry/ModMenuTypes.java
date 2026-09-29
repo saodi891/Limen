@@ -2,6 +2,7 @@ package com.moonlightc.limen.registry;
 
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.inventory.ArtisanBoxMenu;
+import com.moonlightc.limen.inventory.CampfireHubMenu;
 import com.moonlightc.limen.inventory.CampfireMenu;
 import com.moonlightc.limen.inventory.TableSawMenu;
 import net.minecraft.world.inventory.MenuType;
@@ -23,6 +24,11 @@ public final class ModMenuTypes {
     public static final RegistryObject<MenuType<CampfireMenu>> CAMPFIRE = MENU_TYPES.register(
             "campfire",
             () -> IForgeMenuType.create(CampfireMenu::new)
+    );
+
+    public static final RegistryObject<MenuType<CampfireHubMenu>> CAMPFIRE_HUB = MENU_TYPES.register(
+            "campfire_hub",
+            () -> IForgeMenuType.create(CampfireHubMenu::new)
     );
 
     public static final RegistryObject<MenuType<TableSawMenu>> TABLE_SAW = MENU_TYPES.register(

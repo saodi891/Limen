@@ -2,6 +2,7 @@
   "replace": false,
   "values": [
     "limen:artisan_box",
-    "limen:table_saw"
+    "limen:table_saw",
+    "limen:autonomous_spider_remains"
   ]
 }

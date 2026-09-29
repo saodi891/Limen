@@ -6,18 +6,25 @@ import com.moonlightc.limen.entity.monster.SkeletonChippedEntity;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 import software.bernie.geckolib.renderer.layer.BlockAndItemGeoLayer;
 
 public class SkeletonChippedRenderer extends GeoEntityRenderer<SkeletonChippedEntity> {
-    // Tune the held-bow angle here. The vanilla bow's thirdperson transform is authored for the vanilla
-    // arm, so it needs correcting for this rig. Z stands the bow upright (fixes it lying flat), X tilts
-    // it forward/back, Y swings it left/right. Adjust these three until it sits right in the hand.
-    private static final float BOW_ROT_X_DEG = 0.0F;
-    private static final float BOW_ROT_Y_DEG = 0.0F;
-    private static final float BOW_ROT_Z_DEG = 90.0F;
+    // Held-bow orientation, applied X->Y->Z on top of the THIRD_PERSON_RIGHT_HAND display transform.
+    // rightItem is a child of RightArm, so the arm's own rotation is baked in before these apply: the arm
+    // hangs straight down when idle but pitches ~90 degrees forward when aiming (see SkeletonChippedModel
+    // #applyBowPose). One fixed triple therefore can't sit upright in both poses, so idle and aim are tuned
+    // separately; the aim triple is the idle triple plus ~90 degrees on X to cancel the arm's forward pitch.
+    // Tuning guide: Z rolls the bow upright in view, X pitches it forward/back, Y yaws it left/right.
+    private static final float BOW_IDLE_ROT_X = 0.0F;
+    private static final float BOW_IDLE_ROT_Y = 0.0F;
+    private static final float BOW_IDLE_ROT_Z = 90.0F;
+    private static final float BOW_AIM_ROT_X = 90.0F;
+    private static final float BOW_AIM_ROT_Y = 0.0F;
+    private static final float BOW_AIM_ROT_Z = 90.0F;
 
     public SkeletonChippedRenderer(EntityRendererProvider.Context renderManager) {
         super(renderManager, new SkeletonChippedModel());
@@ -46,11 +53,15 @@ public class SkeletonChippedRenderer extends GeoEntityRenderer<SkeletonChippedEn
             protected void renderStackForBone(PoseStack poseStack, GeoBone bone, ItemStack stack, SkeletonChippedEntity animatable, net.minecraft.client.renderer.MultiBufferSource bufferSource, float partialTick, int packedLight, int packedOverlay) {
                 poseStack.pushPose();
 
-                if ("rightItem".equals(bone.getName())) {
-                    // Correct the vanilla bow's orientation for this rig, then nudge it into the palm.
-                    poseStack.mulPose(Axis.ZP.rotationDegrees(BOW_ROT_Z_DEG));
-                    poseStack.mulPose(Axis.YP.rotationDegrees(BOW_ROT_Y_DEG));
-                    poseStack.mulPose(Axis.XP.rotationDegrees(BOW_ROT_X_DEG));
+                if ("rightItem".equals(bone.getName()) && stack.is(Items.BOW)) {
+                    // Aiming vs idle need different corrections because the arm bone pitches forward when aiming.
+                    boolean aiming = animatable.isAggressive();
+                    poseStack.mulPose(Axis.XP.rotationDegrees(aiming ? BOW_AIM_ROT_X : BOW_IDLE_ROT_X));
+                    poseStack.mulPose(Axis.YP.rotationDegrees(aiming ? BOW_AIM_ROT_Y : BOW_IDLE_ROT_Y));
+                    poseStack.mulPose(Axis.ZP.rotationDegrees(aiming ? BOW_AIM_ROT_Z : BOW_IDLE_ROT_Z));
+                    poseStack.translate(-0.05D, 0.08D, -0.02D);
+                    poseStack.scale(0.9F, 0.9F, 0.9F);
+                } else if ("rightItem".equals(bone.getName())) {
                     poseStack.translate(-0.05D, 0.08D, -0.02D);
                     poseStack.scale(0.9F, 0.9F, 0.9F);
                 } else if ("leftItem".equals(bone.getName())) {

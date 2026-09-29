@@ -2,6 +2,7 @@ package com.moonlightc.limen.inventory;
 
 import com.moonlightc.limen.registry.ModItems;
 import com.moonlightc.limen.registry.ModMenuTypes;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -26,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
  * written straight into {@code CampfireBlockEntity.getItems()} would be spat out instantly. The
  * station therefore owns its own contents and its own progress.
  */
-public class CampfireMenu extends AbstractContainerMenu {
+public class CampfireMenu extends AbstractContainerMenu implements CampfireScene {
     public static final int ROAST_SLOTS = 4;
     /** Ten seconds per marshmallow. Progress only runs while the screen is open. */
     public static final int ROAST_TICKS = 200;
@@ -42,21 +43,27 @@ public class CampfireMenu extends AbstractContainerMenu {
     private final Container roasting;
     private final ContainerData progress;
     private final ContainerLevelAccess access;
+    private final BlockPos campfirePos;
 
     /** Client-side constructor. The campfire position rides along in the open packet's buffer. */
     public CampfireMenu(int containerId, Inventory inventory, FriendlyByteBuf data) {
+        this(containerId, inventory, data.readBlockPos());
+    }
+
+    private CampfireMenu(int containerId, Inventory inventory, BlockPos pos) {
         this(containerId, inventory, new SimpleContainer(ROAST_SLOTS), new SimpleContainerData(ROAST_SLOTS),
-                ContainerLevelAccess.create(inventory.player.level(), data.readBlockPos()));
+                ContainerLevelAccess.create(inventory.player.level(), pos), pos);
     }
 
     public CampfireMenu(int containerId, Inventory inventory, Container roasting, ContainerData progress,
-                        ContainerLevelAccess access) {
+                        ContainerLevelAccess access, BlockPos campfirePos) {
         super(ModMenuTypes.CAMPFIRE.get(), containerId);
         checkContainerSize(roasting, ROAST_SLOTS);
         checkContainerDataCount(progress, ROAST_SLOTS);
         this.roasting = roasting;
         this.progress = progress;
         this.access = access;
+        this.campfirePos = campfirePos;
 
         for (int slot = 0; slot < ROAST_SLOTS; slot++) {
             this.addSlot(new RoastingSlot(roasting, slot, SLOT_ROW_X + slot * SLOT_PITCH, SLOT_ROW_Y));
@@ -89,6 +96,12 @@ public class CampfireMenu extends AbstractContainerMenu {
     /** Roasting ticks elapsed on one slot, readable client-side once the data slot has synced. */
     public int getRoastTicks(int slot) {
         return this.progress.get(slot);
+    }
+
+    /** The lit campfire this station is tied to; drives the peace scene and the overhead camera. */
+    @Override
+    public BlockPos getCampfirePos() {
+        return this.campfirePos;
     }
 
     /** Advances every roasting slot by one tick. Driven from the owning player's server tick. */
