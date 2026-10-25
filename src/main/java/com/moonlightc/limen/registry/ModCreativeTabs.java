@@ -32,9 +32,11 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.DAMAGED_CHIP.get());
                         output.accept(ModItems.CHARGED_COIL_ARROW.get());
                         output.accept(ModItems.ELECTROMAGNETIC_CROSSBOW.get());
+                        output.accept(ModItems.FLAME_CHASING_DAGGER.get());
                         output.accept(ModItems.MINDCONTROL_CHIP.get());
                         output.accept(ModItems.GOLDEN_SILK_THREAD.get());
                         output.accept(ModItems.INDUSTRIAL_TAPE.get());
+                        output.accept(ModItems.THUNDER_EMBER_WOOD.get());
                         output.accept(ModItems.ENCHANTMENT_POINTS.get());
                         output.accept(ModItems.LEAVES_OF_GRASS.get());
                         output.accept(ModItems.POLEARM_COMBAT_TECHNIQUES.get());

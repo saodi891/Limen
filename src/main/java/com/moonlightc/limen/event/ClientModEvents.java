@@ -63,6 +63,15 @@ public final class ClientModEvents {
                     com.moonlightc.limen.registry.ModMenuTypes.CAMPFIRE_HUB.get(),
                     com.moonlightc.limen.client.gui.CampfireHubScreen::new);
             net.minecraft.client.gui.screens.MenuScreens.register(
+                    com.moonlightc.limen.registry.ModMenuTypes.CAMPFIRE_ENCHANT.get(),
+                    com.moonlightc.limen.client.gui.CampfireEnchantScreen::new);
+            net.minecraft.client.gui.screens.MenuScreens.register(
+                    com.moonlightc.limen.registry.ModMenuTypes.CAMPFIRE_BREW.get(),
+                    com.moonlightc.limen.client.gui.CampfireBrewScreen::new);
+            net.minecraft.client.gui.screens.MenuScreens.register(
+                    com.moonlightc.limen.registry.ModMenuTypes.CAMPFIRE_MEND.get(),
+                    com.moonlightc.limen.client.gui.CampfireMendScreen::new);
+            net.minecraft.client.gui.screens.MenuScreens.register(
                     com.moonlightc.limen.registry.ModMenuTypes.TABLE_SAW.get(),
                     com.moonlightc.limen.client.gui.TableSawScreen::new);
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.STRUCTURE_VOID_BLOCK.get(), RenderType.cutout());

@@ -40,10 +40,12 @@ public class CampfireHubScreen extends AbstractContainerScreen<CampfireHubMenu> 
                 Component.translatable("gui.limen.campfire_hub.exit"), CampfireHubMenu.BUTTON_EXIT, true);
         addRow(leftX, rightX, startY + BUTTON_HEIGHT + GAP_Y,
                 Component.translatable("gui.limen.campfire_hub.weave"), CampfireHubMenu.BUTTON_WEAVE, false,
-                Component.translatable("gui.limen.campfire_hub.mend"), CampfireHubMenu.BUTTON_MEND, false);
+                Component.translatable("gui.limen.campfire_hub.mend"), CampfireHubMenu.BUTTON_MEND, true);
         addRow(leftX, rightX, startY + (BUTTON_HEIGHT + GAP_Y) * 2,
-                Component.translatable("gui.limen.campfire_hub.enchant"), CampfireHubMenu.BUTTON_ENCHANT, false,
-                Component.translatable("gui.limen.campfire_hub.brew"), CampfireHubMenu.BUTTON_BREW, false);
+                Component.translatable("gui.limen.campfire_hub.enchant"), CampfireHubMenu.BUTTON_ENCHANT,
+                this.menu.isEnchantUnlocked(),
+                Component.translatable("gui.limen.campfire_hub.brew"), CampfireHubMenu.BUTTON_BREW,
+                this.menu.isBrewUnlocked());
     }
 
     private void addRow(int leftX, int rightX, int y,

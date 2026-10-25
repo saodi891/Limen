@@ -67,7 +67,9 @@ public class RoyalPolearmItem extends SwordItem {
 
     @Override
     public UseAnim getUseAnimation(ItemStack stack) {
-        return UseAnim.SPEAR;
+        // Not SPEAR: that forces vanilla's overhead trident-throw pose, which clobbers the custom
+        // charge pose in ClientPolearmPose. NONE keeps the arm at ArmPose.ITEM so the pose takes over.
+        return UseAnim.NONE;
     }
 
     @Override

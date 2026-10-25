@@ -9,6 +9,9 @@
   ],
   "client": [
     "CameraMixin",
+    "ItemInHandLayerMixin",
+    "PolearmArmPoseMixin",
+    "PolearmBraceSlowdownMixin",
     "ScreenEffectRendererMixin"
   ],
   "injectors": {

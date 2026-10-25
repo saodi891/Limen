@@ -108,7 +108,8 @@ public final class CampfireRestManager {
 
         long next = level.getDayTime() + 24000L;
         level.setDayTime(next - next % 24000L);
-        level.setWeatherParameters(0, 0, false, false);
+        // Deliberately do NOT clear the weather: a campfire rest only skips the night, it cannot skip a storm.
+        // Any ongoing rain or thunder carries into the new day (unlike vanilla bed sleep, which clears it).
         for (ServerPlayer player : level.players()) {
             if (player.isSleeping()) {
                 player.stopSleepInBed(false, false);

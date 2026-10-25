@@ -42,10 +42,11 @@ import net.minecraftforge.registries.ForgeRegistries;
  *
  * <p>Each marshmallow is bound to a realm: the plain stick roasts only over an Overworld fire, the blaze
  * rod over any Nether fire or an Overworld soul campfire (hot enough to stand in for the Nether). The wrong
- * pairing shows a flavour message instead of opening. In the Overworld the hub also keeps the
- * night/no-thunderstorm gate ("not the time to roast marshmallows"); the Nether has no real day-night cycle
- * or weather, so its fire is always available. The night check reads the day-time window directly so it
- * stays correct during a daytime thunderstorm (which darkens the sky and would fool a brightness check).
+ * pairing shows a flavour message instead of opening. In the Overworld the hub also keeps the night gate
+ * ("not the time to roast marshmallows"); the Nether has no real day-night cycle, so its fire is always
+ * available. Thunderstorms do not block it — a storm night still opens and can skip the night, it just
+ * cannot skip the storm. The night check reads the day-time window directly so it stays correct during a
+ * daytime thunderstorm (which darkens the sky and would fool a brightness check).
  */
 @Mod.EventBusSubscriber(modid = Limen.MODID)
 public final class CampfireRoastEvents {
@@ -105,25 +106,44 @@ public final class CampfireRoastEvents {
             return;
         }
 
-        // The night/no-thunderstorm gate is Overworld-only; the Nether has no real day-night cycle or
-        // weather, so the blaze-rod fire is always available there.
+        // The night gate is Overworld-only; the Nether has no real day-night cycle, so the blaze-rod fire is
+        // always available there. Thunderstorms do NOT block the marshmallow: a storm night can still skip the
+        // night (the storm itself just carries into the day — see CampfireRestManager, which no longer clears
+        // weather on skip).
         if (overworld) {
             long time = level.getDayTime() % 24000L;
             boolean night = time >= NIGHT_START && time <= NIGHT_END;
-            if (!night || level.isThundering()) {
+            if (!night) {
                 player.displayClientMessage(Component.translatable("message.limen.not_marshmallow_time"), true);
                 return;
             }
+        }
+
+        // One campfire use per night: once the player has obtained a craft (or rested) this night, the hub
+        // refuses to reopen until the next night — even if the night itself has not yet been skipped (e.g. on a
+        // multiplayer server where the sleep threshold is not met).
+        if (CampfireHubMenu.hasSpentTonight(player)) {
+            player.displayClientMessage(Component.translatable("message.limen.campfire_already_used"), true);
+            return;
         }
 
         Component title = Component.translatable(state.is(Blocks.SOUL_CAMPFIRE)
                 ? "container.limen.soul_campfire"
                 : "container.limen.campfire");
         ContainerLevelAccess access = ContainerLevelAccess.create(level, pos);
+        boolean enchantUnlocked =
+                com.moonlightc.limen.inventory.CampfireEnchantMenu.hasEnchanterAdvancement(player);
+        boolean brewUnlocked =
+                com.moonlightc.limen.inventory.CampfireBrewMenu.hasBreweryAdvancement(player);
 
         NetworkHooks.openScreen(player, new net.minecraft.world.SimpleMenuProvider(
-                (containerId, inventory, ignored) -> new CampfireHubMenu(containerId, inventory, access, pos),
-                title), buffer -> buffer.writeBlockPos(pos));
+                (containerId, inventory, ignored) -> new CampfireHubMenu(containerId, inventory, access, pos,
+                        enchantUnlocked, brewUnlocked),
+                title), buffer -> {
+                    buffer.writeBlockPos(pos);
+                    buffer.writeBoolean(enchantUnlocked);
+                    buffer.writeBoolean(brewUnlocked);
+                });
 
         if (level instanceof ServerLevel serverLevel) {
             driveFlee(serverLevel, pos);

@@ -2,7 +2,10 @@ package com.moonlightc.limen.registry;
 
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.inventory.ArtisanBoxMenu;
+import com.moonlightc.limen.inventory.CampfireBrewMenu;
+import com.moonlightc.limen.inventory.CampfireEnchantMenu;
 import com.moonlightc.limen.inventory.CampfireHubMenu;
+import com.moonlightc.limen.inventory.CampfireMendMenu;
 import com.moonlightc.limen.inventory.CampfireMenu;
 import com.moonlightc.limen.inventory.TableSawMenu;
 import net.minecraft.world.inventory.MenuType;
@@ -29,6 +32,21 @@ public final class ModMenuTypes {
     public static final RegistryObject<MenuType<CampfireHubMenu>> CAMPFIRE_HUB = MENU_TYPES.register(
             "campfire_hub",
             () -> IForgeMenuType.create(CampfireHubMenu::new)
+    );
+
+    public static final RegistryObject<MenuType<CampfireEnchantMenu>> CAMPFIRE_ENCHANT = MENU_TYPES.register(
+            "campfire_enchant",
+            () -> IForgeMenuType.create(CampfireEnchantMenu::new)
+    );
+
+    public static final RegistryObject<MenuType<CampfireBrewMenu>> CAMPFIRE_BREW = MENU_TYPES.register(
+            "campfire_brew",
+            () -> IForgeMenuType.create(CampfireBrewMenu::new)
+    );
+
+    public static final RegistryObject<MenuType<CampfireMendMenu>> CAMPFIRE_MEND = MENU_TYPES.register(
+            "campfire_mend",
+            () -> IForgeMenuType.create(CampfireMendMenu::new)
     );
 
     public static final RegistryObject<MenuType<TableSawMenu>> TABLE_SAW = MENU_TYPES.register(

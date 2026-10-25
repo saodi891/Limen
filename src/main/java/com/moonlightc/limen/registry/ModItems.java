@@ -94,6 +94,11 @@ public final class ModItems {
             () -> new Item(new Item.Properties())
     );
 
+    public static final RegistryObject<Item> THUNDER_EMBER_WOOD = ITEMS.register(
+            "thunder_ember_wood",
+            () -> new Item(new Item.Properties())
+    );
+
     public static final RegistryObject<Item> ENCHANTMENT_POINTS = ITEMS.register(
             "enchantment_point",
             () -> new Item(new Item.Properties())
@@ -151,6 +156,12 @@ public final class ModItems {
     public static final RegistryObject<Item> ELECTROMAGNETIC_CROSSBOW = ITEMS.register(
             "electromagnetic_crossbow",
             () -> new ElectromagneticCrossbowItem(new Item.Properties().durability(768))
+    );
+
+    // Late-game test weapon: melee halves current health, bolts ignore armour. Both via limen:flame_dagger.
+    public static final RegistryObject<Item> FLAME_CHASING_DAGGER = ITEMS.register(
+            "flame_chasing_dagger",
+            () -> new com.moonlightc.limen.item.FlameChasingDaggerItem(new Item.Properties().durability(1500))
     );
 
     public static final RegistryObject<Item> LEAVES_OF_GRASS = ITEMS.register(

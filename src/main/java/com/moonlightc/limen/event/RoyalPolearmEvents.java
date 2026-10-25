@@ -14,6 +14,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
@@ -27,6 +28,7 @@ import net.minecraftforge.fml.common.Mod;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 
 @Mod.EventBusSubscriber(modid = Limen.MODID)
 public final class RoyalPolearmEvents {
@@ -34,13 +36,22 @@ public final class RoyalPolearmEvents {
     private static final String CHARGE_START_TICK = "ChargeStartTick";
     private static final String CHARGE_HIT_TIMES = "ChargeHitTimes";
     private static final String FEEDBACK_UNTIL_TICK = "FeedbackUntilTick";
+    private static final String CHARGE_LAST_X = "ChargeLastX";
+    private static final String CHARGE_LAST_Y = "ChargeLastY";
+    private static final String CHARGE_LAST_Z = "ChargeLastZ";
     private static final double ATTACK_START_DISTANCE = 0.0D;
     private static final double CHARGE_ATTACK_START_DISTANCE = 0.0D;
     private static final double ATTACK_END_DISTANCE = 4.5D;
     private static final double STAB_BOX_EXPANSION = 0.25D;
     private static final double CHARGE_BOX_EXPANSION = 0.125D;
     private static final double TICKS_PER_SECOND = 20.0D;
-    private static final double MIN_CHARGE_FORWARD_SPEED = 0.02D;
+    /**
+     * Minimum closing speed that counts as a charge, in blocks/tick (player velocity minus target velocity along
+     * the thrust). 3 m/s — a brisk run — so you must actually move into the hit to trigger the speed bonus, but
+     * not so fast it is hard to land. One block equals one metre and the game runs 20 ticks/second, so
+     * 3 m/s = 3 / 20 blocks/tick.
+     */
+    private static final double MIN_CHARGE_CLOSING_SPEED = 3.0D / TICKS_PER_SECOND;
     private static final double POLEARM_SWEEP_RADIUS = 0.55D;
     private static final int POLEARM_SWEEP_STEPS = 8;
     private static final int CHARGE_PREP_TICKS = 10;
@@ -106,7 +117,8 @@ public final class RoyalPolearmEvents {
             return;
         }
 
-        if (!player.isUsingItem() || !isPolearm(player.getUseItem())) {
+        boolean bracing = player.isUsingItem() && isPolearm(player.getUseItem());
+        if (!bracing) {
             clearChargeState(player);
             return;
         }
@@ -118,13 +130,10 @@ public final class RoyalPolearmEvents {
             chargeTag.putLong(CHARGE_START_TICK, now);
         }
 
+        Vec3 velocity = trackChargeVelocity(player, chargeTag);
+
         int chargeTicks = (int) (now - chargeTag.getLong(CHARGE_START_TICK));
         if (chargeTicks < CHARGE_PREP_TICKS) {
-            return;
-        }
-
-        double forwardSpeed = player.getDeltaMovement().dot(player.getLookAngle().normalize());
-        if (forwardSpeed <= MIN_CHARGE_FORWARD_SPEED) {
             return;
         }
 
@@ -135,7 +144,7 @@ public final class RoyalPolearmEvents {
 
         boolean hitAny = false;
         for (LivingEntity target : targets) {
-            if (applyChargeHit(player, target, stack, now)) {
+            if (applyChargeHit(player, target, stack, now, velocity)) {
                 hitAny = true;
             }
         }
@@ -161,16 +170,19 @@ public final class RoyalPolearmEvents {
         return true;
     }
 
-    private static boolean applyChargeHit(Player player, LivingEntity target, ItemStack stack, long now) {
+    private static boolean applyChargeHit(Player player, LivingEntity target, ItemStack stack, long now, Vec3 playerVelocity) {
         if (!canChargeHit(player, target, now)) {
             return false;
         }
 
         Vec3 look = player.getLookAngle().normalize();
-        double attackerSpeed = player.getDeltaMovement().dot(look);
-        double relativeSpeed = Math.abs(player.getDeltaMovement().subtract(target.getDeltaMovement()).dot(look));
+        double attackerSpeed = playerVelocity.dot(look);
+        double closingSpeed = playerVelocity.subtract(target.getDeltaMovement()).dot(look);
+        if (closingSpeed < MIN_CHARGE_CLOSING_SPEED) {
+            return false;
+        }
 
-        float damage = Math.max(1.0F, Mth.ceil(Math.max(attackerSpeed, relativeSpeed) * TICKS_PER_SECOND));
+        float damage = Math.max(1.0F, Mth.ceil(closingSpeed * TICKS_PER_SECOND));
         boolean harmed = hurtWithPolearm(player, target, damage);
         if (harmed) {
             maybeApplyElectricShock(target, stack, damage);
@@ -184,13 +196,39 @@ public final class RoyalPolearmEvents {
                 target.knockback(CHARGE_KNOCKBACK_STRENGTH, -horizontalLook.x, -horizontalLook.z);
             }
         }
-        if (relativeSpeed > CHARGE_DISMOUNT_SPEED) {
+        if (closingSpeed > CHARGE_DISMOUNT_SPEED) {
             target.stopRiding();
         }
 
         markChargeHit(player, target, now);
         stack.hurtAndBreak(1, player, living -> living.broadcastBreakEvent(player.getUsedItemHand()));
-        return harmed || attackerSpeed > CHARGE_KNOCKBACK_SPEED || relativeSpeed > CHARGE_DISMOUNT_SPEED;
+        return harmed;
+    }
+
+    /**
+     * The player's real velocity this tick in blocks/tick, sampled by this handler itself: the current position
+     * minus the position this same handler stored on the previous tick (kept in the charge NBT). Vanilla's
+     * {@code getX() - xo} does not work for players here — the server resets {@code xo} to the packet-driven
+     * position within the tick, so the horizontal delta reads ~0 while only the server-simulated vertical
+     * (gravity/jump) delta survives. That made a horizontal charge deal no damage no matter how fast, while a
+     * jump produced a large vertical closing speed. Sampling at the same point one tick apart captures real
+     * displacement in every axis, including client-driven horizontal walking/running. Returns zero on the first
+     * braced tick (no stored previous position yet); the {@link #CHARGE_PREP_TICKS} delay means hits are only
+     * evaluated well after a sample exists.
+     */
+    private static Vec3 trackChargeVelocity(Player player, CompoundTag chargeTag) {
+        Vec3 current = player.position();
+        Vec3 velocity = Vec3.ZERO;
+        if (chargeTag.contains(CHARGE_LAST_X)) {
+            velocity = new Vec3(
+                    current.x - chargeTag.getDouble(CHARGE_LAST_X),
+                    current.y - chargeTag.getDouble(CHARGE_LAST_Y),
+                    current.z - chargeTag.getDouble(CHARGE_LAST_Z));
+        }
+        chargeTag.putDouble(CHARGE_LAST_X, current.x);
+        chargeTag.putDouble(CHARGE_LAST_Y, current.y);
+        chargeTag.putDouble(CHARGE_LAST_Z, current.z);
+        return velocity;
     }
 
     private static float getStabDamage(Player player, LivingEntity target) {
@@ -231,6 +269,7 @@ public final class RoyalPolearmEvents {
                 living.isAlive()
                         && living != player
                         && !living.isSpectator()
+                        && !isProtectedAlly(player, living)
                         && isInFront(player, living, look)));
 
         targets.sort(Comparator.comparingDouble(player::distanceToSqr));
@@ -265,8 +304,33 @@ public final class RoyalPolearmEvents {
         return false;
     }
 
-    private static boolean isInFront(Player player, Entity target, Vec3 look) {
-        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(player.getEyePosition());
+    /**
+     * Friendly targets the polearm must never hit: the wielder's own mount, the wielder's own pets, and — on
+     * servers where teams exist — allied players and the pets owned by those allies.
+     */
+    private static boolean isProtectedAlly(Player attacker, LivingEntity target) {
+        if (target == attacker.getVehicle()) {
+            return true;
+        }
+        if (target instanceof Player && attacker.isAlliedTo(target)) {
+            return true;
+        }
+        if (target instanceof OwnableEntity ownable) {
+            UUID ownerId = ownable.getOwnerUUID();
+            if (ownerId != null) {
+                if (ownerId.equals(attacker.getUUID())) {
+                    return true;
+                }
+                LivingEntity owner = ownable.getOwner();
+                if (owner != null && attacker.isAlliedTo(owner)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isInFront(Player player, Entity target, Vec3 look) {        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(player.getEyePosition());
         if (toTarget.lengthSqr() < 1.0E-6D) {
             return true;
         }
