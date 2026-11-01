@@ -20,6 +20,9 @@ run-data/
 .jdk/
 *.iml
 
+# Local helper scripts
+/push-to-github.bat
+
 # Temporary/reference material
 .tmp_goety2/
 .tmp_silkling/
