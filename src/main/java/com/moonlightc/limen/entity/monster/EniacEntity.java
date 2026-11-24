@@ -1,9 +1,12 @@
 package com.moonlightc.limen.entity.monster;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.BossEvent;
@@ -15,7 +18,9 @@ import net.minecraft.world.damagesource.CombatRules;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -29,15 +34,33 @@ import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.vehicle.Boat;
+import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.tags.BiomeTags;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.SpectralArrow;
@@ -45,11 +68,16 @@ import com.moonlightc.limen.entity.projectile.ChargedCoilArrowEntity;
 import com.moonlightc.limen.entity.misc.TotemOfRelinkEntity;
 import com.moonlightc.limen.entity.projectile.PamaEnderPearlEntity;
 import com.moonlightc.limen.entity.projectile.PamaTridentEntity;
+import com.moonlightc.limen.item.ElectromagneticCrossbowItem;
+import com.moonlightc.limen.registry.ModBlocks;
+import com.moonlightc.limen.registry.ModEntities;
 import com.moonlightc.limen.registry.ModItems;
 
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -60,9 +88,14 @@ import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 public final class EniacEntity extends Monster implements GeoEntity {
+    // CombatRules scales protection by 4% per point, so 20 points yields 80% damage reduction.
     private static final float BUILT_IN_PROTECTION = 20.0F;
     private static final double WALK_SPEED_MODIFIER = 1.0D;
-    private static final double RUN_SPEED_MODIFIER = 1.3D;
+    private static final double RUN_SPEED_MODIFIER = 1.375D;
+    private static final double RETREAT_SPEED_MODIFIER = 0.325D;
+    private static final UUID MINING_SPEED_UUID = UUID.fromString("ba991cf8-3094-4bb8-b8c5-9f439abf1b21");
+    private static final AttributeModifier MINING_SPEED_MODIFIER = new AttributeModifier(
+            MINING_SPEED_UUID, "ENIAC mining slowdown", -0.5D, AttributeModifier.Operation.MULTIPLY_TOTAL);
     private static final EntityDimensions CRAWLING_DIMENSIONS = EntityDimensions.scalable(0.6F, 0.6F);
     // Revive animation is 4.5s (90 ticks); the timer matches so phase 2 begins exactly as the clip ends.
     private static final int REVIVE_DURATION_TICKS = 90;
@@ -72,6 +105,8 @@ public final class EniacEntity extends Monster implements GeoEntity {
     // Player-equivalent melee reach (~3 blocks) instead of the shorter default mob reach.
     private static final double ATTACK_REACH = 3.0D;
     private static final int SKILL_A_COOLDOWN_TICKS = 30 * 20;
+    private static final int SKILL_A_SHIELD_BLOCK_REDUCTION_TICKS = 10 * 20;
+    private static final int SKILL_A_BLOCKED_ATTACKS_TO_REDUCE_COOLDOWN = 3;
     // Give up the melee chase after 10s and finish the skill with the ranged trident throw instead.
     private static final int SKILL_A_CHASE_TIMEOUT_TICKS = 10 * 20;
     // The axe launch fires the instant skillAattack starts; this is how long ENIAC then holds the pose.
@@ -85,7 +120,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
     private static final int SKILL_B_COOLDOWN_TICKS = 30 * 20;
     // Only worth teleporting in if the target is beyond normal melee range.
-    private static final double SKILL_B_MIN_RANGE = 8.0D;
+    private static final double SKILL_B_MIN_RANGE = 5.0D;
     private static final int SKILL_B_PEARL_COUNT = 3;
     private static final int SKILL_B_SLASHES_PER_ROUND = 3;
     private static final float SKILL_B_PEARL_SPEED = 1.5F;
@@ -107,6 +142,14 @@ public final class EniacEntity extends Monster implements GeoEntity {
     private static final int SKILL_B_INTERCEPT_SHOTS = 3;
     private static final int SKILL_B_INTERCEPT_INTERVAL_TICKS = 1;
     private static final float SKILL_B_ARROW_SPEED = 3.0F;
+    private static final int SKILL_D_COOLDOWN_TICKS = 10 * 20;
+    private static final double SKILL_D_MIN_HEIGHT = 3.0D;
+    private static final double SKILL_D_RETREAT_DISTANCE = 3.0D;
+    private static final double SKILL_D_RETREAT_DESTINATION = 5.0D;
+    private static final int SKILL_D_RETREAT_TIMEOUT_TICKS = 100;
+    private static final int SKILL_D_ARROW_COUNT = 3;
+    private static final int SKILL_D_ARROW_INTERVAL_TICKS = 20;
+    private static final float SKILL_D_TRIDENT_SPEED = 5.0F;
 
     // Leap attack: whenever the aggro target sits more than this many blocks overhead and out of melee
     // reach, ENIAC immediately jumps high enough to pull it into range, landing a Knockback II-ish punch.
@@ -118,7 +161,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
     // Vanilla jump velocity (~0.42 clears ~1.25 blocks) is the floor; the leap scales up toward the
     // target's height and is capped here so a very high perch can't fling ENIAC absurdly far.
     private static final double PLAYER_JUMP_VELOCITY = 0.42D;
-    private static final double LEAP_MAX_LAUNCH_VELOCITY = 1.1D;
+    private static final double LEAP_MAX_LAUNCH_VELOCITY = Math.sqrt(0.16D * 3.0D);
     // Non-skill melee chase: hop forward once per second to close on a still-out-of-reach target faster.
     private static final int CHASE_HOP_INTERVAL_TICKS = 20;
     private static final double CHASE_HOP_FORWARD = 0.3D;
@@ -126,14 +169,19 @@ public final class EniacEntity extends Monster implements GeoEntity {
     // How fast the body/head swing to square up on the aggro target, in degrees per tick.
     private static final float BODY_TURN_DEGREES_PER_TICK = 30.0F;
 
-    // Phase-1 skillC: switches to the powered polearm and dashes at the highest-health enemy five times.
+    // Phase-1 skillC: switches to the powered polearm and dashes at the highest-health enemy three times.
     // Each dash is a velocity-driven charge that accelerates from ENIAC's run pace up to 3x, deals powered-
     // polearm charge-style (speed-scaled) damage on contact, then charges THROUGH and decelerates instead of
     // stopping. A shield-blocked strike is the only thing that halts it, to break the shield with an axe.
     private static final int SKILL_C_COOLDOWN_TICKS = 30 * 20;
-    private static final int SKILL_C_DASH_COUNT = 5;
+    private static final int SKILL_SHARED_COOLDOWN_TICKS = 12 * 20;
+    private static final int SKILL_E_COOLDOWN_TICKS = 12 * 20;
+    private static final int LEADER_EFFECT_MAX_DURATION_TICKS = 10 * 20;
+    private static final int LEADER_EFFECT_IMMUNITY_TICKS = 30 * 20;
+    private static final int LEADER_EFFECT_MAX_AMPLIFIER = 1;
+    private static final int SKILL_C_DASH_COUNT = 3;
     // skillC1 windup: ENIAC stands still and locks onto the highest-health target before each dash.
-    private static final int SKILL_C_LOCK_TICKS = 20;
+    private static final int SKILL_C_LOCK_TICKS = 6;
     // Abandon a dash if the target can't be reached within this window (target fled/unreachable).
     private static final int SKILL_C_APPROACH_TIMEOUT_TICKS = 100;
     // Pause on a shield-blocked strike while the axe breaks the shield.
@@ -142,6 +190,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
     // then bleeds it back down through the follow-through so it coasts past the target.
     private static final double SKILL_C_CHARGE_BASE_SPEED = 0.35D;
     private static final double SKILL_C_CHARGE_MAX_MULTIPLIER = 3.0D;
+    private static final double SKILL_C_CHARGE_DAMAGE_MULTIPLIER = 1.3D;
     private static final double SKILL_C_CHARGE_ACCEL_PER_TICK = 0.15D;
     private static final double SKILL_C_CHARGE_DECEL_PER_TICK = 0.18D;
     // End the follow-through (and the dash) once deceleration drops the charge below this multiple of run pace.
@@ -149,10 +198,12 @@ public final class EniacEntity extends Monster implements GeoEntity {
     // Mirror of RoyalPolearmEvents charge knockback: directional knockback above this speed, this strength.
     private static final double SKILL_C_CHARGE_KNOCKBACK_SPEED = 5.1D / 20.0D;
     private static final float SKILL_C_CHARGE_KNOCKBACK_STRENGTH = 1.15F;
+    private static final double SKILL_C_CHARGE_DISMOUNT_SPEED = 7.0D / 20.0D;
+    private static final double SKILL_C_OBSTACLE_JUMP_VELOCITY = 0.55D;
     // skillA dash speed as a transient modifier (Speed-II-equivalent) instead of a potion effect.
     private static final UUID SKILL_A_SPEED_UUID = UUID.fromString("2c9d7e14-3f5b-4a6c-8d1e-7b9f0a2c4d6e");
     private static final AttributeModifier SKILL_A_SPEED_MODIFIER = new AttributeModifier(
-            SKILL_A_SPEED_UUID, "skillA dash speed", 0.4D, AttributeModifier.Operation.MULTIPLY_TOTAL);
+            SKILL_A_SPEED_UUID, "skillA dash speed", 0.0909090909D, AttributeModifier.Operation.MULTIPLY_TOTAL);
 
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("animation.eniac.idle");
     private static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.eniac.walk");
@@ -163,11 +214,16 @@ public final class EniacEntity extends Monster implements GeoEntity {
     private static final RawAnimation SKILL_B_LEAP = RawAnimation.begin().thenPlay("animation.eniac.skillb_leap");
     private static final RawAnimation SKILL_B_SLASH = RawAnimation.begin().thenPlay("animation.eniac.skillb_slash");
     private static final RawAnimation SKILL_B_SHOOT = RawAnimation.begin().thenPlay("animation.eniac.skillb_shoot");
+    private static final RawAnimation SKILL_C_COUNTER = RawAnimation.begin().thenPlay("animation.eniac.skillC_counter");
+    private static final RawAnimation SKILL_E = RawAnimation.begin().thenPlay("animation.eniac.skillE");
     private static final RawAnimation REVIVE = RawAnimation.begin().thenPlayAndHold("animation.eniac.revive");
     private static final RawAnimation SKILL_C1 = RawAnimation.begin().thenLoop("animation.eniac.skillC1");
     private static final RawAnimation WALK2 = RawAnimation.begin().thenLoop("animation.eniac.walk2");
+    private static final RawAnimation MINE = RawAnimation.begin().thenLoop("animation.eniac.mine");
 
     private static final EntityDataAccessor<Integer> DATA_PHASE =
+            SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_HEAD_TEXTURE_FRAME =
             SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_REVIVING =
             SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.BOOLEAN);
@@ -177,8 +233,15 @@ public final class EniacEntity extends Monster implements GeoEntity {
             SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_SKILL_C_RUNNING =
             SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_SKILL_D_RUNNING =
+            SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_SKILL_C_SHIELD_BREAKING =
+            SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_MINING =
+            SynchedEntityData.defineId(EniacEntity.class, EntityDataSerializers.BOOLEAN);
 
     private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
+    private final Map<MobEffect, Integer> customEffectImmunities = new HashMap<>();
     // Custom-rendered boss bar (see EniacBossBarOverlay). Named with the entity type's translation key so the
     // client can identify ENIAC's bar even if the mob is renamed with a name tag.
     private final ServerBossEvent bossEvent = new ServerBossEvent(
@@ -187,7 +250,16 @@ public final class EniacEntity extends Monster implements GeoEntity {
     private int skillACooldown;
     private int skillBCooldown;
     private int skillCCooldown;
+    private int skillDCooldown;
+    private int skillSharedCooldown;
+    private int skillECooldown;
+    private int skillCrossbowLoadedTicks;
     private int leapCooldown;
+    private int consecutiveNormalShieldBlocks;
+    private int skillCLockHitCount;
+    private boolean skillCLockActive;
+    private LivingEntity forcedSkillBTarget;
+    private LivingEntity forcedSkillDTarget;
     // Yaw locked in place for the duration of the revive animation so the body/head never rotate.
     private float reviveYaw;
 
@@ -219,10 +291,14 @@ public final class EniacEntity extends Monster implements GeoEntity {
     protected void defineSynchedData() {
         super.defineSynchedData();
         this.entityData.define(DATA_PHASE, 1);
+        this.entityData.define(DATA_HEAD_TEXTURE_FRAME, 0);
         this.entityData.define(DATA_REVIVING, false);
         this.entityData.define(DATA_SKILL_A_RUNNING, false);
         this.entityData.define(DATA_SKILL_B_RUNNING, false);
         this.entityData.define(DATA_SKILL_C_RUNNING, false);
+        this.entityData.define(DATA_SKILL_D_RUNNING, false);
+        this.entityData.define(DATA_SKILL_C_SHIELD_BREAKING, false);
+        this.entityData.define(DATA_MINING, false);
     }
 
     public boolean isSkillARunning() {
@@ -249,8 +325,36 @@ public final class EniacEntity extends Monster implements GeoEntity {
         this.entityData.set(DATA_SKILL_C_RUNNING, running);
     }
 
+    private boolean isSkillDRunning() {
+        return this.entityData.get(DATA_SKILL_D_RUNNING);
+    }
+
+    private void setSkillDRunning(boolean running) {
+        this.entityData.set(DATA_SKILL_D_RUNNING, running);
+    }
+
+    private boolean isSkillCShieldBreaking() {
+        return this.entityData.get(DATA_SKILL_C_SHIELD_BREAKING);
+    }
+
+    private void setSkillCShieldBreaking(boolean breaking) {
+        this.entityData.set(DATA_SKILL_C_SHIELD_BREAKING, breaking);
+    }
+
+    private boolean isMining() {
+        return this.entityData.get(DATA_MINING);
+    }
+
+    private void setMining(boolean mining) {
+        this.entityData.set(DATA_MINING, mining);
+    }
+
     public int getPhase() {
         return this.entityData.get(DATA_PHASE);
+    }
+
+    public int getHeadTextureFrame() {
+        return this.entityData.get(DATA_HEAD_TEXTURE_FRAME);
     }
 
     private void setPhase(int phase) {
@@ -267,27 +371,31 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
     public static AttributeSupplier.Builder createAttributes() {
         return Monster.createMonsterAttributes()
-                .add(Attributes.MAX_HEALTH, 50.0D)
+                .add(Attributes.MAX_HEALTH, 40.0D)
                 .add(Attributes.ARMOR, 20.0D)
                 .add(Attributes.ARMOR_TOUGHNESS, 12.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.13D)
+                .add(Attributes.MOVEMENT_SPEED, 0.15D)
                 .add(Attributes.ATTACK_DAMAGE, 1.0D)
                 .add(Attributes.FOLLOW_RANGE, 40.0D);
     }
 
     @Override
     protected void registerGoals() {
-        this.goalSelector.addGoal(0, new SkillAGoal(this));
-        this.goalSelector.addGoal(0, new SkillBGoal(this));
-        this.goalSelector.addGoal(0, new SkillCGoal(this));
-        this.goalSelector.addGoal(1, new FloatGoal(this));
-        this.goalSelector.addGoal(2, new LeapAtHighTargetGoal(this));
-        this.goalSelector.addGoal(2, new PlayerReachMeleeAttackGoal(this, RUN_SPEED_MODIFIER));
-        this.goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, WALK_SPEED_MODIFIER));
-        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
-        this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(0, new VehicleBreakGoal(this));
+        this.goalSelector.addGoal(1, new SkillAGoal(this));
+        this.goalSelector.addGoal(2, new SkillBGoal(this));
+        this.goalSelector.addGoal(3, new SkillCGoal(this));
+        this.goalSelector.addGoal(4, new SkillDGoal(this));
+        this.goalSelector.addGoal(5, new BlockBreachGoal(this));
+        this.goalSelector.addGoal(6, new FloatGoal(this));
+        this.goalSelector.addGoal(7, new LeapAtHighTargetGoal(this));
+        this.goalSelector.addGoal(7, new PlayerReachMeleeAttackGoal(this, RUN_SPEED_MODIFIER));
+        this.goalSelector.addGoal(8, new WaterAvoidingRandomStrollGoal(this, WALK_SPEED_MODIFIER));
+        this.goalSelector.addGoal(9, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        this.goalSelector.addGoal(10, new RandomLookAroundGoal(this));
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
-        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
+        // Keep players targeted behind cover so BlockBreachGoal can identify and mine the obstruction.
+        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, false));
     }
 
     @Override
@@ -315,7 +423,20 @@ public final class EniacEntity extends Monster implements GeoEntity {
             return;
         }
 
+        this.tickCustomEffectImmunities();
+
+        if (this.getPhase() == 2) {
+            int frame = Math.floorMod(this.tickCount / 2, 9);
+            if (this.getHeadTextureFrame() != frame) {
+                this.entityData.set(DATA_HEAD_TEXTURE_FRAME, frame);
+            }
+        }
+
         this.bossEvent.setProgress(this.getHealth() / this.getMaxHealth());
+
+        if (this.tickCount % 10 == 0) {
+            this.replaceNearbyWaterSource();
+        }
 
         if (this.skillACooldown > 0) {
             this.skillACooldown--;
@@ -326,8 +447,24 @@ public final class EniacEntity extends Monster implements GeoEntity {
         if (this.skillCCooldown > 0) {
             this.skillCCooldown--;
         }
+        if (this.skillDCooldown > 0) {
+            this.skillDCooldown--;
+        }
+        if (this.skillSharedCooldown > 0) {
+            this.skillSharedCooldown--;
+        }
+        if (this.skillECooldown > 0) {
+            this.skillECooldown--;
+        }
+        if (this.skillCrossbowLoadedTicks > 0 && --this.skillCrossbowLoadedTicks == 0) {
+            this.clearSkillCrossbowProjectile();
+        }
         if (this.leapCooldown > 0) {
             this.leapCooldown--;
+        }
+
+        if (this.tickCount % 5 == 0) {
+            this.trySkillE();
         }
 
         if (this.isReviving()) {
@@ -346,7 +483,6 @@ public final class EniacEntity extends Monster implements GeoEntity {
             this.yBodyRotO = this.reviveYaw;
             // 1.0s in: drop the totem it has been holding and release the technical totem entity at the hand.
             if (REVIVE_DURATION_TICKS - this.reviveTicks == TOTEM_RELEASE_TICKS) {
-                this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
                 this.releaseRelinkTotem();
             }
             if (--this.reviveTicks <= 0) {
@@ -370,6 +506,15 @@ public final class EniacEntity extends Monster implements GeoEntity {
         LivingEntity currentTarget = this.getTarget();
         if (currentTarget != null && currentTarget.isAlive()) {
             this.faceTarget(currentTarget);
+            if (!this.isSkillARunning() && !this.isSkillBRunning()
+                    && !this.isSkillCRunning() && !this.isSkillDRunning()
+                    && this.getMainHandItem().isEmpty()) {
+                this.equipBaseWeapon();
+            }
+        } else if (!this.isSkillARunning() && !this.isSkillBRunning()
+                && !this.isSkillCRunning() && !this.isSkillDRunning()) {
+            this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            this.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
         }
     }
 
@@ -383,6 +528,15 @@ public final class EniacEntity extends Monster implements GeoEntity {
         double dx = target.getX() - this.getX();
         double dz = target.getZ() - this.getZ();
         float desiredYaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0F;
+        if (this.isSkillCRunning()) {
+            this.setYRot(desiredYaw);
+            this.yRotO = desiredYaw;
+            this.yBodyRot = desiredYaw;
+            this.yBodyRotO = desiredYaw;
+            this.yHeadRot = desiredYaw;
+            this.yHeadRotO = desiredYaw;
+            return;
+        }
         this.yBodyRot = approachYaw(this.yBodyRot, desiredYaw, BODY_TURN_DEGREES_PER_TICK);
         this.yHeadRot = approachYaw(this.yHeadRot, desiredYaw, BODY_TURN_DEGREES_PER_TICK);
     }
@@ -410,17 +564,99 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
-        // Invulnerable while reviving so it cannot be killed mid-animation, except /kill and the void.
-        if (this.isReviving() && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+        if (this.isReviving()) {
             return false;
         }
-        return super.hurt(source, amount);
+        boolean hurt = super.hurt(source, amount);
+        if (hurt && this.skillCLockActive) {
+            this.skillCLockHitCount++;
+        }
+        return hurt;
+    }
+
+    @Override
+    public boolean addEffect(MobEffectInstance effect, Entity source) {
+        if (this.isCustomHarmfulEffect(effect.getEffect())) {
+            if (this.isImmuneToCustomEffect(effect.getEffect())) {
+                return false;
+            }
+            return super.addEffect(this.limitCustomEffect(effect), source);
+        }
+        return super.addEffect(effect, source);
+    }
+
+    @Override
+    public void forceAddEffect(MobEffectInstance effect, Entity source) {
+        if (this.isCustomHarmfulEffect(effect.getEffect())) {
+            if (this.isImmuneToCustomEffect(effect.getEffect())) {
+                return;
+            }
+            super.forceAddEffect(this.limitCustomEffect(effect), source);
+            return;
+        }
+        super.forceAddEffect(effect, source);
+    }
+
+    @Override
+    public boolean canBeAffected(MobEffectInstance effect) {
+        return (!this.isCustomHarmfulEffect(effect.getEffect())
+                || !this.isImmuneToCustomEffect(effect.getEffect()))
+                && super.canBeAffected(effect);
+    }
+
+    @Override
+    protected void onEffectRemoved(MobEffectInstance effect) {
+        super.onEffectRemoved(effect);
+        if (!this.level().isClientSide && this.isCustomHarmfulEffect(effect.getEffect())) {
+            this.customEffectImmunities.put(effect.getEffect(), LEADER_EFFECT_IMMUNITY_TICKS);
+        }
+    }
+
+    private boolean isCustomHarmfulEffect(MobEffect effect) {
+        ResourceLocation key = BuiltInRegistries.MOB_EFFECT.getKey(effect);
+        return effect.getCategory() == MobEffectCategory.HARMFUL
+                && key != null
+                && !"minecraft".equals(key.getNamespace());
+    }
+
+    private boolean isImmuneToCustomEffect(MobEffect effect) {
+        return this.customEffectImmunities.getOrDefault(effect, 0) > 0;
+    }
+
+    private void tickCustomEffectImmunities() {
+        this.customEffectImmunities.replaceAll((effect, ticks) -> ticks - 1);
+        this.customEffectImmunities.values().removeIf(ticks -> ticks <= 0);
+    }
+
+    private MobEffectInstance limitCustomEffect(MobEffectInstance effect) {
+        int duration = effect.getDuration() < 0
+                ? LEADER_EFFECT_MAX_DURATION_TICKS
+                : Math.min(effect.getDuration(), LEADER_EFFECT_MAX_DURATION_TICKS);
+        MobEffectInstance limited = new MobEffectInstance(
+                effect.getEffect(),
+                duration,
+                Math.min(effect.getAmplifier(), LEADER_EFFECT_MAX_AMPLIFIER),
+                effect.isAmbient(),
+                effect.isVisible(),
+                effect.showIcon(),
+                null,
+                effect.getFactorData());
+        limited.setCurativeItems(effect.getCurativeItems());
+        return limited;
     }
 
     @Override
     public boolean isPushable() {
         // Cannot be shoved around by colliding entities while the revive animation plays.
         return !this.isReviving() && super.isPushable();
+    }
+
+    @Override
+    public boolean startRiding(Entity vehicle, boolean force) {
+        if (vehicle instanceof Boat || vehicle instanceof AbstractMinecart) {
+            return false;
+        }
+        return super.startRiding(vehicle, force);
     }
 
     @Override
@@ -433,9 +669,11 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
     @Override
     public void die(DamageSource source) {
+        if (this.isReviving()) {
+            return;
+        }
         // First death in phase 1 is intercepted: play the revive animation instead, then return at 20 HP.
-        if (!this.level().isClientSide && this.getPhase() == 1 && !this.isReviving()
-                && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+        if (!this.level().isClientSide && this.getPhase() == 1) {
             this.startRevive();
             return;
         }
@@ -455,7 +693,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         this.setDeltaMovement(Vec3.ZERO);
         this.hurtMarked = true;
         // Holds the relink totem in its main hand (empty offhand) for the first 1.0s of the revive.
-        this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.TOTEM_OF_RELINK.get()));
+        this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         this.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
     }
 
@@ -484,7 +722,22 @@ public final class EniacEntity extends Monster implements GeoEntity {
         tag.putInt("SkillACooldown", this.skillACooldown);
         tag.putInt("SkillBCooldown", this.skillBCooldown);
         tag.putInt("SkillCCooldown", this.skillCCooldown);
+        tag.putInt("SkillDCooldown", this.skillDCooldown);
+        tag.putInt("SkillSharedCooldown", this.skillSharedCooldown);
+        tag.putInt("SkillECooldown", this.skillECooldown);
         tag.putInt("LeapCooldown", this.leapCooldown);
+        ListTag effectImmunities = new ListTag();
+        for (Map.Entry<MobEffect, Integer> entry : this.customEffectImmunities.entrySet()) {
+            ResourceLocation key = BuiltInRegistries.MOB_EFFECT.getKey(entry.getKey());
+            if (key == null || entry.getValue() <= 0) {
+                continue;
+            }
+            CompoundTag immunity = new CompoundTag();
+            immunity.putString("Effect", key.toString());
+            immunity.putInt("Ticks", entry.getValue());
+            effectImmunities.add(immunity);
+        }
+        tag.put("CustomEffectImmunities", effectImmunities);
     }
 
     @Override
@@ -497,12 +750,184 @@ public final class EniacEntity extends Monster implements GeoEntity {
         this.skillACooldown = tag.getInt("SkillACooldown");
         this.skillBCooldown = tag.getInt("SkillBCooldown");
         this.skillCCooldown = tag.getInt("SkillCCooldown");
+        this.skillDCooldown = tag.getInt("SkillDCooldown");
+        this.skillSharedCooldown = tag.getInt("SkillSharedCooldown");
+        this.skillECooldown = tag.getInt("SkillECooldown");
         this.leapCooldown = tag.getInt("LeapCooldown");
+        this.customEffectImmunities.clear();
+        ListTag effectImmunities = tag.getList("CustomEffectImmunities", 10);
+        for (int index = 0; index < effectImmunities.size(); index++) {
+            CompoundTag immunity = effectImmunities.getCompound(index);
+            ResourceLocation key = ResourceLocation.tryParse(immunity.getString("Effect"));
+            int ticks = immunity.getInt("Ticks");
+            if (key != null && ticks > 0 && BuiltInRegistries.MOB_EFFECT.containsKey(key)) {
+                MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(key);
+                if (this.isCustomHarmfulEffect(effect)) {
+                    this.customEffectImmunities.put(effect, Math.min(ticks, LEADER_EFFECT_IMMUNITY_TICKS));
+                }
+            }
+        }
     }
 
     /** Player-equivalent melee reach used by both the normal attack goal and skillA's approach check. */
     private double getPlayerReachSqr(LivingEntity target) {
         return ATTACK_REACH * ATTACK_REACH + target.getBbWidth();
+    }
+
+    private boolean canBreachToward(LivingEntity target) {
+        if (target == null || !target.isAlive() || this.hasLineOfSight(target)) {
+            return false;
+        }
+        Path path = this.getNavigation().createPath(target, 0);
+        return path == null || !path.canReach();
+    }
+
+    private boolean hasUsablePathTo(LivingEntity target) {
+        if (target == null || !target.isAlive()) {
+            return false;
+        }
+        Path path = this.getNavigation().createPath(target, 0);
+        return path != null && path.canReach();
+    }
+
+    private BlockPos getVanillaObstacle(LivingEntity target) {
+        BlockHitResult hit = this.level().clip(new ClipContext(
+                this.getEyePosition(), target.getEyePosition(),
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            return null;
+        }
+        BlockPos pos = hit.getBlockPos();
+        BlockState state = this.level().getBlockState(pos);
+        if (!"minecraft".equals(BuiltInRegistries.BLOCK.getKey(state.getBlock()).getNamespace())) {
+            return null;
+        }
+        if (isWaterlogged(state) && !isDesertOrBadlands(this.level(), pos)) {
+            return null;
+        }
+        return pos.immutable();
+    }
+
+    private static ItemStack getDiamondTool(BlockState state) {
+        if (state.is(net.minecraft.tags.BlockTags.MINEABLE_WITH_AXE)) {
+            return new ItemStack(Items.DIAMOND_AXE);
+        }
+        if (state.is(net.minecraft.tags.BlockTags.MINEABLE_WITH_SHOVEL)) {
+            return new ItemStack(Items.DIAMOND_SHOVEL);
+        }
+        if (state.is(net.minecraft.tags.BlockTags.MINEABLE_WITH_HOE)) {
+            return new ItemStack(Items.DIAMOND_HOE);
+        }
+        return new ItemStack(Items.DIAMOND_PICKAXE);
+    }
+
+    private void breakObstacle(BlockPos pos, ItemStack tool) {
+        if (!(this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)
+                || !serverLevel.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return;
+        }
+        BlockState state = serverLevel.getBlockState(pos);
+        if (state.isAir() || state.getDestroySpeed(serverLevel, pos) < 0.0F
+                || !"minecraft".equals(BuiltInRegistries.BLOCK.getKey(state.getBlock()).getNamespace())) {
+            return;
+        }
+        if (isWaterlogged(state) && !isDesertOrBadlands(serverLevel, pos)) {
+            return;
+        }
+        Block.dropResources(state, serverLevel, pos, serverLevel.getBlockEntity(pos), this, tool);
+        serverLevel.levelEvent(2001, pos, Block.getId(state));
+        serverLevel.setBlockAndUpdate(pos, com.moonlightc.limen.registry.ModBlocks.STRUCTURE_VOID_BLOCK.get().defaultBlockState());
+    }
+
+    private static double getDiamondMiningProgress(BlockState state, Level level, BlockPos pos, ItemStack tool) {
+        float hardness = state.getDestroySpeed(level, pos);
+        if (hardness <= 0.0F) {
+            return hardness == 0.0F ? 1.0D : 0.0D;
+        }
+        float speed = tool.getDestroySpeed(state);
+        if (speed <= 1.0F) {
+            speed = 1.0F;
+        }
+        return speed / hardness / (state.requiresCorrectToolForDrops() && !tool.isCorrectToolForDrops(state) ? 100.0D : 30.0D);
+    }
+
+    private static boolean isVehicle(Entity entity) {
+        return entity instanceof Boat || entity instanceof AbstractMinecart;
+    }
+
+    private boolean areCoreSkillsOnCooldown() {
+        return this.skillACooldown > 0 && this.skillBCooldown > 0 && this.skillCCooldown > 0;
+    }
+
+    private static boolean isWaterlogged(BlockState state) {
+        return state.hasProperty(BlockStateProperties.WATERLOGGED)
+                && state.getValue(BlockStateProperties.WATERLOGGED);
+    }
+
+    private static boolean isDesertOrBadlands(Level level, BlockPos pos) {
+        var biome = level.getBiome(pos);
+        return biome.is(Biomes.DESERT) || biome.is(BiomeTags.IS_BADLANDS);
+    }
+
+    private void trySkillE() {
+        if (this.skillECooldown > 0
+                || !(this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return;
+        }
+        BlockPos center = this.blockPosition();
+        List<BlockPos> voidBlocks = new java.util.ArrayList<>();
+        BlockPos.betweenClosedStream(center.offset(-5, -5, -5), center.offset(5, 5, 5))
+                .filter(pos -> pos.distToCenterSqr(this.position()) <= 25.0D)
+                .filter(pos -> serverLevel.getBlockState(pos).is(ModBlocks.STRUCTURE_VOID_BLOCK.get()))
+                .map(BlockPos::immutable)
+                .forEach(voidBlocks::add);
+        if (voidBlocks.size() < 6) {
+            return;
+        }
+
+        this.skillECooldown = SKILL_E_COOLDOWN_TICKS;
+        this.triggerAnim("actions", "skillE");
+        for (BlockPos pos : voidBlocks) {
+            if (!serverLevel.getBlockState(pos).is(ModBlocks.STRUCTURE_VOID_BLOCK.get())) {
+                continue;
+            }
+            var detector = ModEntities.PAMA_DETECTOR.get().spawn(
+                    serverLevel, pos, MobSpawnType.TRIGGERED);
+            if (detector != null) {
+                serverLevel.removeBlock(pos, false);
+            }
+        }
+    }
+
+    private void replaceNearbyWaterSource() {
+        if (!this.areCoreSkillsOnCooldown()
+                || !(this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return;
+        }
+        if (!isDesertOrBadlands(serverLevel, this.blockPosition())) {
+            return;
+        }
+        BlockPos center = this.blockPosition();
+        BlockPos nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-5, -5, -5), center.offset(5, 5, 5))) {
+            if (pos.distToCenterSqr(this.position()) > 25.0D) {
+                continue;
+            }
+            BlockState state = serverLevel.getBlockState(pos);
+            if (!state.is(Blocks.WATER) || !state.getFluidState().is(FluidTags.WATER)
+                    || !state.getFluidState().isSource()) {
+                continue;
+            }
+            double distance = pos.distToCenterSqr(this.position());
+            if (distance < nearestDistance) {
+                nearest = pos.immutable();
+                nearestDistance = distance;
+            }
+        }
+        if (nearest != null && serverLevel.getBlockState(nearest).is(Blocks.WATER)) {
+            serverLevel.setBlockAndUpdate(nearest, ModBlocks.STRUCTURE_VOID_BLOCK.get().defaultBlockState());
+        }
     }
 
     /**
@@ -581,16 +1006,20 @@ public final class EniacEntity extends Monster implements GeoEntity {
      */
     private void fireSkillATrident(LivingEntity locked) {
         LivingEntity target = this.chooseTridentTarget(locked);
+        this.firePamaTridentAt(target, SKILL_A_TRIDENT_SPEED);
+    }
+
+    private void firePamaTridentAt(LivingEntity target, float speed) {
         if (target == null || !target.isAlive()) {
             return;
         }
         PamaTridentEntity trident = new PamaTridentEntity(this.level(), this, new ItemStack(ModItems.PAMA_TRIDENT.get()));
         Vec3 from = this.getEyePosition();
         Vec3 targetCenter = target.getBoundingBox().getCenter();
-        double travelTicks = from.distanceTo(targetCenter) / SKILL_A_TRIDENT_SPEED;
+        double travelTicks = from.distanceTo(targetCenter) / speed;
         Vec3 predicted = targetCenter.add(target.getDeltaMovement().scale(travelTicks));
         Vec3 direction = predicted.subtract(from);
-        trident.shoot(direction.x, direction.y, direction.z, SKILL_A_TRIDENT_SPEED, 0.0F);
+        trident.shoot(direction.x, direction.y, direction.z, speed, 0.0F);
         this.level().addFreshEntity(trident);
         this.playSound(SoundEvents.TRIDENT_THROW, 1.0F, 1.0F);
     }
@@ -642,19 +1071,79 @@ public final class EniacEntity extends Monster implements GeoEntity {
         if (target == null || !target.isAlive()) {
             return;
         }
+        this.clearSkillCrossbowProjectile();
+        this.stopUsingItem();
+        ItemStack visualProjectile = new ItemStack(shotIndex == 0
+                ? Items.SPECTRAL_ARROW : ModItems.CHARGED_COIL_ARROW.get());
+        this.setSkillCrossbowProjectile(visualProjectile);
         AbstractArrow arrow = shotIndex == 0
                 ? new SpectralArrow(this.level(), this)
                 : new ChargedCoilArrowEntity(this.level(), this);
         arrow.setOwner(this);
+        arrow.pickup = AbstractArrow.Pickup.DISALLOWED;
         Vec3 from = new Vec3(this.getX(), this.getEyeY() - 0.1D, this.getZ());
         Vec3 direction = target.getBoundingBox().getCenter().subtract(from);
         arrow.shoot(direction.x, direction.y, direction.z, SKILL_B_ARROW_SPEED, 1.0F);
         this.level().addFreshEntity(arrow);
         this.playSound(SoundEvents.CROSSBOW_SHOOT, 1.0F, 1.0F);
+        this.startUsingItem(InteractionHand.MAIN_HAND);
+    }
+
+    private void setSkillCrossbowProjectile(ItemStack projectile) {
+        ItemStack crossbow = this.getItemBySlot(EquipmentSlot.MAINHAND);
+        if (!crossbow.is(ModItems.ELECTROMAGNETIC_CROSSBOW.get())) {
+            crossbow = new ItemStack(ModItems.ELECTROMAGNETIC_CROSSBOW.get());
+        }
+        net.minecraft.nbt.ListTag chargedProjectiles = new net.minecraft.nbt.ListTag();
+        chargedProjectiles.add(projectile.save(new CompoundTag()));
+        crossbow.getOrCreateTag().put("ChargedProjectiles", chargedProjectiles);
+        CrossbowItem.setCharged(crossbow, true);
+        ElectromagneticCrossbowItem.syncChargedModelData(crossbow);
+        this.setItemSlot(EquipmentSlot.MAINHAND, crossbow);
+        this.skillCrossbowLoadedTicks = 3;
+    }
+
+    private void clearSkillCrossbowProjectile() {
+        this.skillCrossbowLoadedTicks = 0;
+        ItemStack crossbow = this.getItemBySlot(EquipmentSlot.MAINHAND);
+        if (!crossbow.is(ModItems.ELECTROMAGNETIC_CROSSBOW.get())) {
+            return;
+        }
+        CrossbowItem.setCharged(crossbow, false);
+        CompoundTag tag = crossbow.getTag();
+        if (tag != null) {
+            tag.remove("ChargedProjectiles");
+        }
+        ElectromagneticCrossbowItem.syncChargedModelData(crossbow);
+        this.setItemSlot(EquipmentSlot.MAINHAND, crossbow);
+    }
+
+    private LivingEntity findHighUnreachableTarget() {
+        double range = this.getAttributeValue(Attributes.FOLLOW_RANGE);
+        AABB bounds = this.getBoundingBox().inflate(range);
+        List<Player> candidates = this.level().getEntitiesOfClass(Player.class, bounds,
+                player -> player.isAlive() && !player.isCreative() && !player.isSpectator()
+                        && player.getY() - this.getY() > SKILL_D_MIN_HEIGHT
+                        && this.hasLineOfSight(player) && !this.hasUsablePathTo(player));
+        return candidates.stream()
+                .min(Comparator.comparingDouble(this::distanceToSqr))
+                .map(LivingEntity.class::cast)
+                .orElseGet(() -> {
+                    LivingEntity target = this.currentAggroTarget();
+                    return target != null && target.getY() - this.getY() > SKILL_D_MIN_HEIGHT
+                            && !this.hasUsablePathTo(target) ? target : null;
+                });
     }
 
     private void equipSkillBCrossbow() {
-        this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.PAMA_CROSSBOW.get()));
+        this.skillCrossbowLoadedTicks = 0;
+        this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.ELECTROMAGNETIC_CROSSBOW.get()));
+        this.startUsingItem(InteractionHand.MAIN_HAND);
+    }
+
+    private void stopSkillCrossbowUse() {
+        this.clearSkillCrossbowProjectile();
+        this.stopUsingItem();
     }
 
     /** skillC target pick: the highest-health hostile player, ties resolving to the nearest; else the aggro target. */
@@ -687,6 +1176,35 @@ public final class EniacEntity extends Monster implements GeoEntity {
         var attribute = this.getAttribute(Attributes.MOVEMENT_SPEED);
         if (attribute != null) {
             attribute.removeModifier(SKILL_A_SPEED_UUID);
+        }
+    }
+
+    private void recordNormalAttackShieldBlock(LivingEntity target) {
+        DamageSource source = this.damageSources().mobAttack(this);
+        if (target instanceof Player player && player.isBlocking() && player.isDamageSourceBlocked(source)) {
+            this.consecutiveNormalShieldBlocks++;
+            if (this.consecutiveNormalShieldBlocks >= SKILL_A_BLOCKED_ATTACKS_TO_REDUCE_COOLDOWN) {
+                this.skillACooldown = Math.max(0,
+                        this.skillACooldown - SKILL_A_SHIELD_BLOCK_REDUCTION_TICKS);
+                this.consecutiveNormalShieldBlocks = 0;
+            }
+        } else {
+            this.consecutiveNormalShieldBlocks = 0;
+        }
+    }
+
+    private void setMiningSlowdown(boolean active) {
+        this.setMining(active);
+        var attribute = this.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (attribute == null) {
+            return;
+        }
+        if (active) {
+            if (!attribute.hasModifier(MINING_SPEED_MODIFIER)) {
+                attribute.addTransientModifier(MINING_SPEED_MODIFIER);
+            }
+        } else {
+            attribute.removeModifier(MINING_SPEED_UUID);
         }
     }
 
@@ -766,8 +1284,14 @@ public final class EniacEntity extends Monster implements GeoEntity {
             if (this.isReviving()) {
                 return state.setAndContinue(REVIVE);
             }
+            if (this.isMining()) {
+                return state.setAndContinue(MINE);
+            }
             if (this.isSkillARunning()) {
                 return state.setAndContinue(SKILL_A_RUN);
+            }
+            if (this.isSkillDRunning()) {
+                return state.setAndContinue(state.isMoving() ? RUN : IDLE);
             }
             if (this.isSkillCRunning()) {
                 return state.setAndContinue(state.isMoving() ? WALK2 : SKILL_C1);
@@ -778,11 +1302,14 @@ public final class EniacEntity extends Monster implements GeoEntity {
             return state.setAndContinue(this.isAggressive() ? RUN : WALK);
         }));
         controllers.add(new AnimationController<>(this, "actions", 0, state -> PlayState.STOP)
+                .setAnimationSpeedHandler(entity -> entity.isSkillCShieldBreaking() ? 2.0D : 1.0D)
                 .triggerableAnim("attack", ATTACK)
                 .triggerableAnim("skillAattack", SKILL_A_ATTACK)
                 .triggerableAnim("skillb_leap", SKILL_B_LEAP)
                 .triggerableAnim("skillb_slash", SKILL_B_SLASH)
-                .triggerableAnim("skillb_shoot", SKILL_B_SHOOT));
+                .triggerableAnim("skillb_shoot", SKILL_B_SHOOT)
+                .triggerableAnim("skillc_counter", SKILL_C_COUNTER)
+                .triggerableAnim("skillE", SKILL_E));
     }
 
     @Override
@@ -799,6 +1326,155 @@ public final class EniacEntity extends Monster implements GeoEntity {
         return this.animationCache;
     }
 
+    private static final class VehicleBreakGoal extends Goal {
+        private static final int ATTACK_INTERVAL_TICKS = 12;
+
+        private final EniacEntity eniac;
+        private Entity vehicle;
+        private int attackCooldown;
+
+        private VehicleBreakGoal(EniacEntity eniac) {
+            this.eniac = eniac;
+            this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+        }
+
+        @Override
+        public boolean canUse() {
+            if (!this.eniac.areCoreSkillsOnCooldown()
+                    || this.eniac.isSkillARunning() || this.eniac.isSkillBRunning()
+                    || this.eniac.isSkillCRunning() || this.eniac.isSkillDRunning()) {
+                return false;
+            }
+            LivingEntity target = this.eniac.getTarget();
+            if (target == null || !target.isAlive() || !isVehicle(target.getVehicle())) {
+                return false;
+            }
+            this.vehicle = target.getVehicle();
+            return this.vehicle.isAlive();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            LivingEntity target = this.eniac.getTarget();
+            return this.eniac.areCoreSkillsOnCooldown()
+                    && target != null && target.isAlive() && this.vehicle != null && this.vehicle.isAlive()
+                    && target.getVehicle() == this.vehicle;
+        }
+
+        @Override
+        public void start() {
+            this.attackCooldown = 0;
+        }
+
+        @Override
+        public void tick() {
+            if (this.vehicle == null) {
+                return;
+            }
+            this.eniac.getLookControl().setLookAt(this.vehicle, 30.0F, 30.0F);
+            if (this.eniac.distanceToSqr(this.vehicle) > 9.0D) {
+                this.eniac.getNavigation().moveTo(this.vehicle, RUN_SPEED_MODIFIER);
+                return;
+            }
+            this.eniac.getNavigation().stop();
+            if (this.attackCooldown > 0) {
+                this.attackCooldown--;
+                return;
+            }
+            this.attackCooldown = ATTACK_INTERVAL_TICKS;
+            this.eniac.swing(InteractionHand.MAIN_HAND);
+            this.vehicle.hurt(this.eniac.damageSources().mobAttack(this.eniac),
+                    (float) this.eniac.getAttributeValue(Attributes.ATTACK_DAMAGE));
+        }
+
+        @Override
+        public void stop() {
+            this.eniac.getNavigation().stop();
+            this.vehicle = null;
+        }
+    }
+
+    private static final class BlockBreachGoal extends Goal {
+        private final EniacEntity eniac;
+        private BlockPos miningPos;
+        private ItemStack tool = ItemStack.EMPTY;
+        private double progress;
+
+        private BlockBreachGoal(EniacEntity eniac) {
+            this.eniac = eniac;
+            this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+        }
+
+        @Override
+        public boolean canUse() {
+            if (this.eniac.isReviving() || this.eniac.isSkillARunning() || this.eniac.isSkillBRunning()
+                    || this.eniac.isSkillCRunning() || this.eniac.isSkillDRunning()
+                    || !(this.eniac.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)
+                    || !serverLevel.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+                return false;
+            }
+            LivingEntity target = this.eniac.getTarget();
+            BlockPos obstacle = this.eniac.canBreachToward(target) ? this.eniac.getVanillaObstacle(target) : null;
+            if (obstacle == null) {
+                return false;
+            }
+            this.miningPos = obstacle;
+            this.tool = getDiamondTool(this.eniac.level().getBlockState(obstacle));
+            this.progress = 0.0D;
+            return true;
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            LivingEntity target = this.eniac.getTarget();
+            if (this.miningPos == null || target == null || !target.isAlive()
+                    || this.eniac.hasLineOfSight(target)) {
+                return false;
+            }
+            BlockPos obstacle = this.eniac.getVanillaObstacle(target);
+            return this.miningPos.equals(obstacle);
+        }
+
+        @Override
+        public void start() {
+            this.eniac.getNavigation().stop();
+            this.eniac.setMiningSlowdown(true);
+        }
+
+        @Override
+        public void tick() {
+            LivingEntity target = this.eniac.getTarget();
+            if (target == null || this.miningPos == null) {
+                return;
+            }
+            this.eniac.getLookControl().setLookAt(target, 30.0F, 30.0F);
+            BlockState state = this.eniac.level().getBlockState(this.miningPos);
+            double increment = getDiamondMiningProgress(state, this.eniac.level(), this.miningPos, this.tool);
+            if (increment <= 0.0D) {
+                return;
+            }
+            this.progress += increment;
+            int stage = Math.min(9, (int) (this.progress * 10.0D));
+            this.eniac.level().destroyBlockProgress(this.eniac.getId(), this.miningPos, stage);
+            if (this.progress >= 1.0D) {
+                this.eniac.breakObstacle(this.miningPos, this.tool);
+                this.eniac.level().destroyBlockProgress(this.eniac.getId(), this.miningPos, -1);
+                this.miningPos = null;
+            }
+        }
+
+        @Override
+        public void stop() {
+            this.eniac.setMiningSlowdown(false);
+            if (this.miningPos != null) {
+                this.eniac.level().destroyBlockProgress(this.eniac.getId(), this.miningPos, -1);
+            }
+            this.miningPos = null;
+            this.tool = ItemStack.EMPTY;
+            this.progress = 0.0D;
+        }
+    }
+
     /** Normal melee attack goal with player-equivalent reach and a sword-like swing cadence. */
     private static final class PlayerReachMeleeAttackGoal extends MeleeAttackGoal {
         // Netherite-sword speed (~1.6 attacks/s -> ~0.6s). The vanilla mob default of 20 ticks felt sluggish.
@@ -806,6 +1482,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         private final EniacEntity eniac;
         private int attackCooldown;
         private int hopCooldown;
+        private boolean chaseHopInProgress;
 
         private PlayerReachMeleeAttackGoal(EniacEntity eniac, double speedModifier) {
             super(eniac, speedModifier, false);
@@ -827,13 +1504,26 @@ public final class EniacEntity extends Monster implements GeoEntity {
             super.start();
             this.attackCooldown = 0;
             this.hopCooldown = CHASE_HOP_INTERVAL_TICKS;
+            this.chaseHopInProgress = false;
         }
 
         @Override
         public void tick() {
-            super.tick();
+            // Keep navigation from steering against the launch vector while the chase hop is airborne.
+            if (this.chaseHopInProgress && !this.eniac.onGround()) {
+                this.eniac.getNavigation().stop();
+            } else {
+                this.chaseHopInProgress = false;
+                super.tick();
+            }
             if (this.attackCooldown > 0) {
                 this.attackCooldown--;
+            }
+            if (this.chaseHopInProgress && !this.eniac.onGround()) {
+                LivingEntity target = this.eniac.getTarget();
+                if (target != null) {
+                    this.checkAndPerformAttack(target, this.eniac.distanceToSqr(target));
+                }
             }
             this.tickChaseHop();
         }
@@ -854,9 +1544,10 @@ public final class EniacEntity extends Monster implements GeoEntity {
                 double dz = target.getZ() - this.eniac.getZ();
                 double horiz = Math.sqrt(dx * dx + dz * dz);
                 Vec3 v = this.eniac.getDeltaMovement();
-                double vx = horiz > 1.0E-4D ? dx / horiz * CHASE_HOP_FORWARD : 0.0D;
-                double vz = horiz > 1.0E-4D ? dz / horiz * CHASE_HOP_FORWARD : 0.0D;
-                this.eniac.setDeltaMovement(v.x + vx, PLAYER_JUMP_VELOCITY, v.z + vz);
+                Vec3 boosted = addForwardJumpImpulse(v, dx, dz, CHASE_HOP_FORWARD);
+                this.eniac.getNavigation().stop();
+                this.chaseHopInProgress = true;
+                this.eniac.setDeltaMovement(boosted.x, PLAYER_JUMP_VELOCITY, boosted.z);
                 this.eniac.hasImpulse = true;
             }
         }
@@ -864,9 +1555,11 @@ public final class EniacEntity extends Monster implements GeoEntity {
         // Self-managed cadence: the vanilla cooldown field is private, so gate on our own counter instead.
         @Override
         protected void checkAndPerformAttack(LivingEntity target, double distToTargetSqr) {
-            if (this.attackCooldown <= 0 && distToTargetSqr <= this.getAttackReachSqr(target)) {
+            if (this.attackCooldown <= 0 && distToTargetSqr <= this.getAttackReachSqr(target)
+                    && this.eniac.hasLineOfSight(target)) {
                 this.attackCooldown = NORMAL_ATTACK_INTERVAL_TICKS;
                 this.eniac.swing(InteractionHand.MAIN_HAND);
+                this.eniac.recordNormalAttackShieldBlock(target);
                 this.eniac.doHurtTarget(target);
             }
         }
@@ -896,7 +1589,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         @Override
         public boolean canUse() {
             if (this.eniac.isReviving() || this.eniac.isSkillARunning() || this.eniac.isSkillBRunning()
-                    || this.eniac.isSkillCRunning()
+                    || this.eniac.isSkillCRunning() || this.eniac.isSkillDRunning()
                     || this.eniac.leapCooldown > 0 || !this.eniac.onGround()) {
                 return false;
             }
@@ -948,13 +1641,13 @@ public final class EniacEntity extends Monster implements GeoEntity {
             // Peak the hop a little above the target so ENIAC's melee reach connects on the way up; solve
             // the vanilla ballistic (h ~= v^2 / 0.16) for the launch velocity, then clamp to sane bounds.
             double heightDiff = Math.max(0.0D, this.target.getY() - this.eniac.getY());
-            double desiredPeak = heightDiff + 1.0D;
+            double desiredPeak = Math.min(heightDiff + 1.0D, 3.0D);
             double vy = Math.sqrt(0.16D * desiredPeak) * 1.12D;
             vy = Math.max(PLAYER_JUMP_VELOCITY, Math.min(vy, LEAP_MAX_LAUNCH_VELOCITY));
-            double vh = horiz > 1.0E-4D ? Math.min(horiz * 0.25D, 0.6D) : 0.0D;
-            double vx = horiz > 1.0E-4D ? dx / horiz * vh : 0.0D;
-            double vz = horiz > 1.0E-4D ? dz / horiz * vh : 0.0D;
-            this.eniac.setDeltaMovement(vx, vy, vz);
+            Vec3 boosted = addForwardJumpImpulse(
+                    this.eniac.getDeltaMovement(), dx, dz,
+                    horiz > 1.0E-4D ? Math.min(horiz * 0.25D, 0.6D) : 0.0D);
+            this.eniac.setDeltaMovement(boosted.x, vy, boosted.z);
             this.eniac.hasImpulse = true;
             this.eniac.playSound(SoundEvents.PLAYER_ATTACK_STRONG, 1.0F, 1.0F);
         }
@@ -986,6 +1679,27 @@ public final class EniacEntity extends Monster implements GeoEntity {
         }
     }
 
+    private static Vec3 addForwardJumpImpulse(Vec3 velocity, double dx, double dz, double impulse) {
+        double horizontalLength = Math.sqrt(dx * dx + dz * dz);
+        if (horizontalLength < 1.0E-4D || impulse <= 0.0D) {
+            return velocity;
+        }
+
+        double vx = velocity.x + dx / horizontalLength * impulse;
+        double vz = velocity.z + dz / horizontalLength * impulse;
+        double newSpeed = Math.sqrt(vx * vx + vz * vz);
+        double oldSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+        if (newSpeed < oldSpeed && newSpeed > 1.0E-4D) {
+            double preserveSpeed = oldSpeed / newSpeed;
+            vx *= preserveSpeed;
+            vz *= preserveSpeed;
+        } else if (newSpeed <= 1.0E-4D) {
+            vx = dx / horizontalLength * oldSpeed;
+            vz = dz / horizontalLength * oldSpeed;
+        }
+        return new Vec3(vx, velocity.y, vz);
+    }
+
     /**
      * Phase-1 skillA: 30s cooldown. On cast ENIAC gains a transient Speed-II-equivalent movement modifier,
      * dashes to the lowest-armour hostile target playing skillArun, then performs skillAattack which flings
@@ -1002,6 +1716,9 @@ public final class EniacEntity extends Monster implements GeoEntity {
         private LivingEntity target;
         private int phase;
         private int timer;
+        private BlockPos miningPos;
+        private ItemStack miningTool = ItemStack.EMPTY;
+        private double miningProgress;
 
         private SkillAGoal(EniacEntity eniac) {
             this.eniac = eniac;
@@ -1010,7 +1727,8 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
         @Override
         public boolean canUse() {
-            if (this.eniac.getPhase() != 1 || this.eniac.isReviving() || this.eniac.skillACooldown > 0) {
+            if (this.eniac.getPhase() != 1 || this.eniac.isReviving()
+                    || this.eniac.skillACooldown > 0 || this.eniac.skillSharedCooldown > 0) {
                 return false;
             }
             this.target = this.eniac.findLowestArmorTarget();
@@ -1025,6 +1743,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         @Override
         public void start() {
             this.eniac.skillACooldown = SKILL_A_COOLDOWN_TICKS;
+            this.eniac.skillSharedCooldown = SKILL_SHARED_COOLDOWN_TICKS;
             this.eniac.setTarget(this.target);
             this.eniac.applySkillASpeed();
             this.eniac.equipSkillAAxe();
@@ -1040,10 +1759,21 @@ public final class EniacEntity extends Monster implements GeoEntity {
                 this.phase = PHASE_DONE;
                 return;
             }
+            if (this.phase == PHASE_APPROACH && this.target instanceof Player
+                    && !this.eniac.hasUsablePathTo(this.target)) {
+                this.eniac.forcedSkillDTarget = this.target;
+                this.eniac.skillACooldown = 0;
+                this.eniac.skillSharedCooldown = 0;
+                this.phase = PHASE_DONE;
+                return;
+            }
             this.eniac.getLookControl().setLookAt(this.target, 30.0F, 30.0F);
 
             switch (this.phase) {
                 case PHASE_APPROACH -> {
+                    if (this.tickObstacleMining()) {
+                        return;
+                    }
                     this.eniac.getNavigation().moveTo(this.target, RUN_SPEED_MODIFIER);
                     if (this.eniac.distanceToSqr(this.target) <= this.eniac.getPlayerReachSqr(this.target)) {
                         this.eniac.setSkillARunning(false);
@@ -1075,6 +1805,51 @@ public final class EniacEntity extends Monster implements GeoEntity {
             }
         }
 
+        /**
+         * A's chase owns MOVE/LOOK, so it must mine its own obstruction instead of relying on BlockBreachGoal.
+         * Keep the same vanilla-block whitelist, diamond-tool speed, structure-void replacement, and slowdown.
+         */
+        private boolean tickObstacleMining() {
+            BlockPos obstacle = this.eniac.canBreachToward(this.target)
+                    ? this.eniac.getVanillaObstacle(this.target) : null;
+            if (obstacle == null) {
+                this.clearMining();
+                return false;
+            }
+            if (!obstacle.equals(this.miningPos)) {
+                this.clearMining();
+                this.miningPos = obstacle;
+                this.miningTool = getDiamondTool(this.eniac.level().getBlockState(obstacle));
+            }
+
+            this.eniac.getNavigation().stop();
+            this.eniac.setMiningSlowdown(true);
+            BlockState state = this.eniac.level().getBlockState(this.miningPos);
+            this.miningProgress += getDiamondMiningProgress(
+                    state, this.eniac.level(), this.miningPos, this.miningTool);
+            int stage = Math.min(9, (int) (this.miningProgress * 10.0D));
+            this.eniac.level().destroyBlockProgress(this.eniac.getId(), this.miningPos, stage);
+            if (this.miningProgress >= 1.0D) {
+                this.eniac.breakObstacle(this.miningPos, this.miningTool);
+                this.eniac.level().destroyBlockProgress(this.eniac.getId(), this.miningPos, -1);
+                this.miningPos = null;
+                this.miningTool = ItemStack.EMPTY;
+                this.miningProgress = 0.0D;
+                this.eniac.setMiningSlowdown(false);
+            }
+            return true;
+        }
+
+        private void clearMining() {
+            if (this.miningPos != null) {
+                this.eniac.level().destroyBlockProgress(this.eniac.getId(), this.miningPos, -1);
+            }
+            this.miningPos = null;
+            this.miningTool = ItemStack.EMPTY;
+            this.miningProgress = 0.0D;
+            this.eniac.setMiningSlowdown(false);
+        }
+
         /** Ends the chase/strike beat: swaps to the shock bow and releases the trident as the throw begins. */
         private void beginBowThrow() {
             this.eniac.setSkillARunning(false);
@@ -1095,6 +1870,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         public void stop() {
             this.eniac.setSkillARunning(false);
             this.eniac.getNavigation().stop();
+            this.clearMining();
             this.eniac.removeSkillASpeed();
             // Return to the base loadout (pama_sword) once the skill ends.
             this.eniac.equipBaseWeapon();
@@ -1137,15 +1913,17 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
         @Override
         public boolean canUse() {
+            boolean forced = this.eniac.forcedSkillBTarget != null;
             if (this.eniac.getPhase() != 1 || this.eniac.isReviving()
-                    || this.eniac.isSkillARunning() || this.eniac.skillBCooldown > 0) {
+                    || this.eniac.isSkillARunning()
+                    || (!forced && (this.eniac.skillBCooldown > 0 || this.eniac.skillSharedCooldown > 0))) {
                 return false;
             }
-            LivingEntity candidate = this.eniac.findLowestArmorTarget();
+            LivingEntity candidate = forced ? this.eniac.forcedSkillBTarget : this.eniac.findLowestArmorTarget();
             if (candidate == null) {
                 return false;
             }
-            if (this.eniac.distanceToSqr(candidate) < SKILL_B_MIN_RANGE * SKILL_B_MIN_RANGE) {
+            if (!forced && this.eniac.distanceToSqr(candidate) < SKILL_B_MIN_RANGE * SKILL_B_MIN_RANGE) {
                 return false;
             }
             this.target = candidate;
@@ -1159,7 +1937,9 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
         @Override
         public void start() {
+            this.eniac.forcedSkillBTarget = null;
             this.eniac.skillBCooldown = SKILL_B_COOLDOWN_TICKS;
+            this.eniac.skillSharedCooldown = SKILL_SHARED_COOLDOWN_TICKS;
             this.eniac.setTarget(this.target);
             this.eniac.setSkillBRunning(true);
             this.eniac.getNavigation().stop();
@@ -1258,6 +2038,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         public void stop() {
             this.eniac.setSkillBRunning(false);
             this.eniac.getNavigation().stop();
+            this.eniac.stopSkillCrossbowUse();
             this.eniac.equipBaseWeapon();
             this.target = null;
             this.pearl = null;
@@ -1270,19 +2051,137 @@ public final class EniacEntity extends Monster implements GeoEntity {
     }
 
     /**
+     * Phase-1 skillD: retreat from a high target, throw a PAMA trident, then fire a short coil-arrow volley.
+     */
+    private static final class SkillDGoal extends Goal {
+        private static final int PHASE_RETREAT = 0;
+        private static final int PHASE_SHOOT = 1;
+        private static final int PHASE_DONE = 2;
+
+        private final EniacEntity eniac;
+        private LivingEntity target;
+        private int phase;
+        private int timer;
+        private int arrowsRemaining;
+
+        private SkillDGoal(EniacEntity eniac) {
+            this.eniac = eniac;
+            this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.TARGET));
+        }
+
+        @Override
+        public boolean canUse() {
+            boolean forced = this.eniac.forcedSkillDTarget != null;
+            if (this.eniac.getPhase() != 1 || this.eniac.isReviving()
+                    || (!forced && this.eniac.skillDCooldown > 0) || this.eniac.isSkillARunning()
+                    || this.eniac.isSkillBRunning() || this.eniac.isSkillCRunning()) {
+                return false;
+            }
+            this.target = forced ? this.eniac.forcedSkillDTarget : this.eniac.findHighUnreachableTarget();
+            return this.target != null;
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return this.phase != PHASE_DONE && this.target != null && this.target.isAlive();
+        }
+
+        @Override
+        public void start() {
+            this.eniac.forcedSkillDTarget = null;
+            this.eniac.skillDCooldown = SKILL_D_COOLDOWN_TICKS;
+            this.eniac.setTarget(this.target);
+            this.eniac.setSkillDRunning(true);
+            this.eniac.getNavigation().stop();
+            this.phase = PHASE_RETREAT;
+            this.timer = SKILL_D_RETREAT_TIMEOUT_TICKS;
+            this.arrowsRemaining = SKILL_D_ARROW_COUNT;
+        }
+
+        @Override
+        public void tick() {
+            if (this.target == null || !this.target.isAlive()) {
+                this.phase = PHASE_DONE;
+                return;
+            }
+            this.eniac.getLookControl().setLookAt(this.target, 30.0F, 30.0F);
+
+            if (this.phase == PHASE_RETREAT) {
+                double dx = this.eniac.getX() - this.target.getX();
+                double dz = this.eniac.getZ() - this.target.getZ();
+                if (dx * dx + dz * dz > SKILL_D_RETREAT_DISTANCE * SKILL_D_RETREAT_DISTANCE
+                        || --this.timer <= 0) {
+                    this.eniac.getNavigation().stop();
+                    this.eniac.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(ModItems.PAMA_TRIDENT.get()));
+                    this.eniac.firePamaTridentAt(this.target, SKILL_D_TRIDENT_SPEED);
+                    this.eniac.equipSkillBCrossbow();
+                    this.phase = PHASE_SHOOT;
+                    this.timer = SKILL_D_ARROW_INTERVAL_TICKS;
+                    return;
+                }
+                this.moveAwayFromTarget();
+                return;
+            }
+
+            if (this.phase == PHASE_SHOOT && --this.timer <= 0) {
+                this.eniac.triggerAnim("actions", "skillb_shoot");
+                this.eniac.fireSkillBInterceptShot(1, this.target);
+                this.arrowsRemaining--;
+                if (this.arrowsRemaining <= 0) {
+                    this.phase = PHASE_DONE;
+                } else {
+                    this.timer = SKILL_D_ARROW_INTERVAL_TICKS;
+                }
+            }
+        }
+
+        private void moveAwayFromTarget() {
+            double dx = this.eniac.getX() - this.target.getX();
+            double dz = this.eniac.getZ() - this.target.getZ();
+            double distance = Math.sqrt(dx * dx + dz * dz);
+            if (distance < 1.0E-4D) {
+                double yaw = Math.toRadians(this.eniac.getYRot());
+                dx = -Math.sin(yaw);
+                dz = Math.cos(yaw);
+                distance = 1.0D;
+            }
+            double destinationX = this.target.getX() + dx / distance * SKILL_D_RETREAT_DESTINATION;
+            double destinationZ = this.target.getZ() + dz / distance * SKILL_D_RETREAT_DESTINATION;
+            this.eniac.getNavigation().moveTo(destinationX, this.eniac.getY(), destinationZ, RETREAT_SPEED_MODIFIER);
+        }
+
+        @Override
+        public void stop() {
+            this.eniac.setSkillDRunning(false);
+            this.eniac.getNavigation().stop();
+            this.eniac.stopSkillCrossbowUse();
+            this.eniac.equipBaseWeapon();
+            this.target = null;
+            this.phase = PHASE_DONE;
+            this.timer = 0;
+            this.arrowsRemaining = 0;
+        }
+    }
+
+    /**
      * Phase-1 skillC: 30s cooldown. ENIAC equips the powered polearm, plays skillC1 while standing still to
-     * lock onto the highest-health enemy, then plays walk2 and charges. Each of the five dashes is a
+     * lock onto the highest-health enemy, then plays walk2 and charges. Each of the three dashes is a
      * velocity-driven charge that accelerates from ENIAC's run pace up to {@link #SKILL_C_CHARGE_MAX_MULTIPLIER}x,
      * deals powered-polearm charge-style (speed-scaled) damage plus directional knockback on contact, then
      * charges THROUGH the target and decelerates rather than stopping — leaving run-up room for the next dash.
      * If a strike is caught on a shield it halts, swaps to an axe to break the shield, then resumes. After the
-     * fifth dash the skill ends.
+     * third dash the skill ends.
      */
     private static final class SkillCGoal extends Goal {
         private static final int PHASE_LOCK = 0;
         private static final int PHASE_CHARGE = 1;
         private static final int PHASE_SHIELD_BREAK = 2;
-        private static final int PHASE_DONE = 3;
+        private static final int PHASE_COUNTERATTACK = 3;
+        private static final int PHASE_DONE = 4;
+        private static final int COUNTERATTACK_COUNT = 5;
+        private static final int COUNTERATTACK_INTERVAL_TICKS = 2;
+        private static final float COUNTERATTACK_DAMAGE = 9.0F;
+        private static final double COUNTERATTACK_RADIUS = 2.0D;
 
         private final EniacEntity eniac;
         private LivingEntity target;
@@ -1295,6 +2194,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         private double chargeDirZ;
         private double chargeMultiplier;
         private boolean struck;
+        private int counterattacksRemaining;
 
         private SkillCGoal(EniacEntity eniac) {
             this.eniac = eniac;
@@ -1305,7 +2205,8 @@ public final class EniacEntity extends Monster implements GeoEntity {
         public boolean canUse() {
             if (this.eniac.getPhase() != 1 || this.eniac.isReviving()
                     || this.eniac.isSkillARunning() || this.eniac.isSkillBRunning()
-                    || this.eniac.skillCCooldown > 0) {
+                    || this.eniac.isSkillDRunning() || this.eniac.skillCCooldown > 0
+                    || this.eniac.skillSharedCooldown > 0) {
                 return false;
             }
             this.target = this.eniac.findHighestHealthTarget();
@@ -1320,6 +2221,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
         @Override
         public void start() {
             this.eniac.skillCCooldown = SKILL_C_COOLDOWN_TICKS;
+            this.eniac.skillSharedCooldown = SKILL_SHARED_COOLDOWN_TICKS;
             this.eniac.setSkillCRunning(true);
             this.eniac.equipPoweredPolearm();
             this.dashesRemaining = SKILL_C_DASH_COUNT;
@@ -1334,6 +2236,8 @@ public final class EniacEntity extends Monster implements GeoEntity {
             this.timer = SKILL_C_LOCK_TICKS;
             this.struck = false;
             this.chargeMultiplier = 1.0D;
+            this.eniac.skillCLockHitCount = 0;
+            this.eniac.skillCLockActive = true;
         }
 
         @Override
@@ -1345,13 +2249,23 @@ public final class EniacEntity extends Monster implements GeoEntity {
                     return;
                 }
             }
+            if (this.target instanceof Player && !this.eniac.hasUsablePathTo(this.target)) {
+                this.eniac.forcedSkillBTarget = this.target;
+                this.eniac.skillCCooldown = 0;
+                this.eniac.skillSharedCooldown = 0;
+                this.phase = PHASE_DONE;
+                return;
+            }
             this.eniac.getLookControl().setLookAt(this.target, 30.0F, 30.0F);
 
             switch (this.phase) {
                 case PHASE_LOCK -> {
                     this.freeze();
                     this.eniac.setTarget(this.target);
-                    if (--this.timer <= 0) {
+                    if (this.eniac.skillCLockHitCount >= 2) {
+                        this.beginCounterattack();
+                    } else if (--this.timer <= 0) {
+                        this.eniac.skillCLockActive = false;
                         this.timer = SKILL_C_APPROACH_TIMEOUT_TICKS;
                         this.phase = PHASE_CHARGE;
                     }
@@ -1361,12 +2275,52 @@ public final class EniacEntity extends Monster implements GeoEntity {
                     this.freeze();
                     if (--this.timer <= 0) {
                         this.eniac.breakTargetShield(this.target);
+                        this.eniac.setSkillCShieldBreaking(false);
                         this.eniac.equipPoweredPolearm();
                         this.finishDash();
                     }
                 }
+                case PHASE_COUNTERATTACK -> {
+                    if (--this.timer <= 0) {
+                        this.counterattackPulse();
+                    }
+                }
                 default -> {
                 }
+            }
+        }
+
+        private void beginCounterattack() {
+            this.eniac.skillCLockActive = false;
+            this.eniac.getNavigation().stop();
+            this.freeze();
+            this.phase = PHASE_COUNTERATTACK;
+            this.counterattacksRemaining = COUNTERATTACK_COUNT;
+            this.timer = 0;
+            this.eniac.triggerAnim("actions", "skillc_counter");
+            this.counterattackPulse();
+        }
+
+        private void counterattackPulse() {
+            AABB area = this.eniac.getBoundingBox().inflate(COUNTERATTACK_RADIUS);
+            List<LivingEntity> targets = this.eniac.level().getEntitiesOfClass(
+                    LivingEntity.class, area,
+                    candidate -> candidate != this.eniac && candidate.isAlive()
+                            && this.eniac.distanceToSqr(candidate) <= COUNTERATTACK_RADIUS * COUNTERATTACK_RADIUS
+                            && this.eniac.canAttack(candidate) && this.eniac.hasLineOfSight(candidate));
+            this.eniac.playSound(SoundEvents.PLAYER_ATTACK_SWEEP, 1.0F, 0.9F + this.counterattacksRemaining * 0.03F);
+            DamageSource source = this.eniac.damageSources().mobAttack(this.eniac);
+            for (LivingEntity candidate : targets) {
+                int previousInvulnerableTime = candidate.invulnerableTime;
+                candidate.invulnerableTime = 0;
+                candidate.hurt(source, COUNTERATTACK_DAMAGE);
+                candidate.invulnerableTime = Math.max(previousInvulnerableTime, candidate.invulnerableTime);
+            }
+            this.counterattacksRemaining--;
+            if (this.counterattacksRemaining <= 0) {
+                this.finishDash();
+            } else {
+                this.timer = COUNTERATTACK_INTERVAL_TICKS;
             }
         }
 
@@ -1377,6 +2331,10 @@ public final class EniacEntity extends Monster implements GeoEntity {
          * re-locks for the next dash. A shield-blocked hit halts it into the shield-break phase instead.
          */
         private void charge() {
+            if (this.handleWallCollision()) {
+                return;
+            }
+
             if (!this.struck) {
                 double dx = this.target.getX() - this.eniac.getX();
                 double dz = this.target.getZ() - this.eniac.getZ();
@@ -1390,8 +2348,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
                 this.drive();
                 if (this.eniac.distanceToSqr(this.target) <= this.eniac.getPlayerReachSqr(this.target)) {
                     this.strike();
-                } else if (this.eniac.horizontalCollision || --this.timer <= 0) {
-                    // Wall or timeout before reaching the target; spend this dash and re-lock.
+                } else if (--this.timer <= 0) {
                     this.finishDash();
                 }
                 return;
@@ -1399,7 +2356,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
 
             // Follow-through: keep the locked heading and bleed off speed so ENIAC coasts past the target.
             this.chargeMultiplier -= SKILL_C_CHARGE_DECEL_PER_TICK;
-            if (this.chargeMultiplier <= SKILL_C_FOLLOW_THROUGH_MIN_MULTIPLIER || this.eniac.horizontalCollision) {
+            if (this.chargeMultiplier <= SKILL_C_FOLLOW_THROUGH_MIN_MULTIPLIER) {
                 this.finishDash();
                 return;
             }
@@ -1414,6 +2371,25 @@ public final class EniacEntity extends Monster implements GeoEntity {
             this.eniac.hasImpulse = true;
         }
 
+        private boolean handleWallCollision() {
+            if (!this.eniac.horizontalCollision) {
+                return false;
+            }
+            AABB jumpClearance = this.eniac.getBoundingBox().move(
+                    this.chargeDirX * 0.75D, 1.01D, this.chargeDirZ * 0.75D);
+            if (this.eniac.level().noCollision(this.eniac, jumpClearance)) {
+                if (this.eniac.onGround()) {
+                    Vec3 velocity = this.eniac.getDeltaMovement();
+                    this.eniac.setDeltaMovement(velocity.x,
+                            Math.max(velocity.y, SKILL_C_OBSTACLE_JUMP_VELOCITY), velocity.z);
+                    this.eniac.hasImpulse = true;
+                }
+                return true;
+            }
+            this.finishDash();
+            return true;
+        }
+
         /** Land the charge hit (speed-scaled damage + directional knockback), or halt to break a raised shield. */
         private void strike() {
             DamageSource source = this.eniac.damageSources().mobAttack(this.eniac);
@@ -1421,6 +2397,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
                     && player.isDamageSourceBlocked(source)) {
                 this.eniac.getNavigation().stop();
                 this.freeze();
+                this.eniac.setSkillCShieldBreaking(true);
                 this.eniac.triggerAnim("actions", "skillAattack");
                 this.eniac.equipSkillCAxe();
                 this.timer = SKILL_C_SHIELD_BREAK_TICKS;
@@ -1431,21 +2408,25 @@ public final class EniacEntity extends Monster implements GeoEntity {
             // Mirror RoyalPolearmEvents#applyChargeHit: damage scales with charge speed; knockback runs along the heading.
             Vec3 delta = this.eniac.getDeltaMovement();
             Vec3 targetDelta = this.target.getDeltaMovement();
-            double attackerSpeed = delta.x * this.chargeDirX + delta.z * this.chargeDirZ;
-            double relativeSpeed = Math.abs((delta.x - targetDelta.x) * this.chargeDirX
-                    + (delta.z - targetDelta.z) * this.chargeDirZ);
-            float damage = Math.max(1.0F, (float) Math.ceil(Math.max(attackerSpeed, relativeSpeed) * 20.0D));
+            double closingSpeed = (delta.x - targetDelta.x) * this.chargeDirX
+                    + (delta.z - targetDelta.z) * this.chargeDirZ;
+            float damage = Math.max(1.0F, (float) Math.ceil(
+                    closingSpeed * 20.0D * SKILL_C_CHARGE_DAMAGE_MULTIPLIER));
             this.eniac.triggerAnim("actions", "attack");
             boolean harmed = this.target.hurt(source, damage);
-            if (harmed && attackerSpeed > SKILL_C_CHARGE_KNOCKBACK_SPEED) {
+            if (harmed && closingSpeed > SKILL_C_CHARGE_KNOCKBACK_SPEED) {
                 this.target.knockback(SKILL_C_CHARGE_KNOCKBACK_STRENGTH, -this.chargeDirX, -this.chargeDirZ);
                 this.target.hurtMarked = true;
+            }
+            if (harmed && closingSpeed > SKILL_C_CHARGE_DISMOUNT_SPEED) {
+                this.target.stopRiding();
             }
             // Do not stop: keep the heading and let the follow-through coast ENIAC through the target.
             this.struck = true;
         }
 
         private void finishDash() {
+            this.eniac.skillCLockActive = false;
             this.dashesRemaining--;
             if (this.dashesRemaining > 0) {
                 this.beginLock();
@@ -1461,6 +2442,9 @@ public final class EniacEntity extends Monster implements GeoEntity {
         @Override
         public void stop() {
             this.eniac.setSkillCRunning(false);
+            this.eniac.setSkillCShieldBreaking(false);
+            this.eniac.skillCLockActive = false;
+            this.eniac.skillCLockHitCount = 0;
             this.eniac.getNavigation().stop();
             this.eniac.equipBaseWeapon();
             this.target = null;
@@ -1468,6 +2452,7 @@ public final class EniacEntity extends Monster implements GeoEntity {
             this.phase = PHASE_DONE;
             this.timer = 0;
             this.struck = false;
+            this.counterattacksRemaining = 0;
         }
     }
 }

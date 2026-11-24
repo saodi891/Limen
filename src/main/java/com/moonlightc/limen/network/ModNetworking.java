@@ -60,5 +60,10 @@ public final class ModNetworking {
                 .encoder(PamaTridentImpactPacket::encode)
                 .consumerMainThread(PamaTridentImpactPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(MechanicTrappedPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(MechanicTrappedPacket::decode)
+                .encoder(MechanicTrappedPacket::encode)
+                .consumerMainThread(MechanicTrappedPacket::handle)
+                .add();
     }
 }

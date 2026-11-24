@@ -19,6 +19,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -66,6 +67,16 @@ public final class CampfireRoastEvents {
     @SubscribeEvent
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getHand() != InteractionHand.MAIN_HAND) {
+            return;
+        }
+
+        if (event.getLevel().getBlockState(event.getPos()).getBlock() instanceof BedBlock
+                && event.getEntity() instanceof ServerPlayer serverPlayer
+                && CampfireHubMenu.hasSpentTonight(serverPlayer)) {
+            event.setCanceled(true);
+            event.setCancellationResult(net.minecraft.world.InteractionResult.sidedSuccess(false));
+            serverPlayer.displayClientMessage(
+                    Component.translatable("message.limen.campfire_bed_locked"), true);
             return;
         }
 

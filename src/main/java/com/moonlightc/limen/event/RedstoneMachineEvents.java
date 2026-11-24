@@ -2,9 +2,9 @@ package com.moonlightc.limen.event;
 
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.api.tag.LimenEntityTypeTags;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
@@ -94,17 +94,40 @@ public final class RedstoneMachineEvents {
             followRange = 16.0D;
         }
 
-        Player glowingTarget = mob.level().getEntitiesOfClass(Player.class, mob.getBoundingBox().inflate(followRange),
+        LivingEntity currentTarget = mob.getTarget();
+        if (currentTarget != null && currentTarget.isAlive() && mob.canAttack(currentTarget)
+                && !(currentTarget instanceof IronGolem)) {
+            return;
+        }
+
+        Player playerTarget = mob.level().getEntitiesOfClass(Player.class, mob.getBoundingBox().inflate(followRange),
                         player -> player.isAlive()
                                 && !player.isCreative()
                                 && !player.isSpectator()
-                                && player.hasEffect(MobEffects.GLOWING))
+                                && mob.canAttack(player))
                 .stream()
                 .min(Comparator.comparingDouble(mob::distanceToSqr))
                 .orElse(null);
 
-        if (glowingTarget != null) {
-            mob.setTarget(glowingTarget);
+        if (playerTarget != null) {
+            if (currentTarget != playerTarget) {
+                mob.setTarget(playerTarget);
+            }
+            return;
+        }
+
+        if (currentTarget != null && currentTarget.isAlive() && mob.canAttack(currentTarget)) {
+            return;
+        }
+
+        IronGolem golemTarget = mob.level().getEntitiesOfClass(IronGolem.class,
+                        mob.getBoundingBox().inflate(followRange),
+                        golem -> golem.isAlive() && mob.canAttack(golem))
+                .stream()
+                .min(Comparator.comparingDouble(mob::distanceToSqr))
+                .orElse(null);
+        if (golemTarget != null && currentTarget != golemTarget) {
+            mob.setTarget(golemTarget);
         }
     }
 }

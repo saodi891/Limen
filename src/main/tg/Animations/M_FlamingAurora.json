@@ -1,0 +1,54 @@
+{
+  "Textures": {},
+  "Parameters": {
+    "BlendMode": 2,
+    "ShadingModel": 0,
+    "Colors": {
+      "Colour1": {
+        "R": 0.013615,
+        "G": 0.55707,
+        "B": 0.895833,
+        "A": 1.0,
+        "Hex": "1FC5F3"
+      },
+      "Colour2": {
+        "R": 0.096568,
+        "G": 0.684662,
+        "B": 1.0,
+        "A": 1.0,
+        "Hex": "57D8FF"
+      }
+    },
+    "Scalars": {
+      "Colour Offset Range": 0.0,
+      "Colour Shift Speed": 20.0,
+      "FPS": 24.0,
+      "Resolution": 40.0,
+      "BaseReflectFractionIn": 1.036384,
+      "ExponentIn": 2.76245,
+      "Fade Hardness": -0.107353,
+      "Glow Power": 5.0,
+      "Panning Speed": 30.0,
+      "Tiling": 0.5,
+      "RefractionDepthBias": 0.0
+    },
+    "Switches": {
+      "Use Light Up Aura": false
+    },
+    "Properties": {
+      "bHasStaticPermutationResource": true,
+      "BasePropertyOverrides": {
+        "TwoSided": true,
+        "BlendMode": "BLEND_Translucent",
+        "ShadingModel": "MSM_Unlit",
+        "OpacityMaskClipValue": 0.3333
+      }
+    },
+    "HasTopDiffuse": false,
+    "HasTopNormals": false,
+    "HasTopSpecularMasks": false,
+    "HasTopEmissive": false,
+    "IsTranslucent": true,
+    "IsNull": true
+  }
+}

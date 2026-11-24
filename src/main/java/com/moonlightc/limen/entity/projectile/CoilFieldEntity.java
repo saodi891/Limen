@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 public class CoilFieldEntity extends Entity {
     public static final float EFFECT_RADIUS = 1.5F;
@@ -24,6 +25,8 @@ public class CoilFieldEntity extends Entity {
     private int remainingTicks = LIFETIME_TICKS;
     private int damageCooldownTicks;
     private UUID anchorEntityId;
+    @Nullable
+    private UUID ownerUUID;
 
     public CoilFieldEntity(EntityType<? extends CoilFieldEntity> entityType, Level level) {
         super(entityType, level);
@@ -36,9 +39,18 @@ public class CoilFieldEntity extends Entity {
         this.setPos(x, y, z);
     }
 
+    public void setOwner(@Nullable Entity owner) {
+        this.ownerUUID = owner == null ? null : owner.getUUID();
+    }
+
     public CoilFieldEntity(Level level, Entity anchor) {
+        this(level, anchor, null);
+    }
+
+    public CoilFieldEntity(Level level, Entity anchor, @Nullable Entity owner) {
         this(ModEntities.COIL_FIELD.get(), level);
         this.anchorEntityId = anchor.getUUID();
+        this.ownerUUID = owner == null ? null : owner.getUUID();
         this.updateAnchorPosition(anchor);
     }
 
@@ -53,6 +65,9 @@ public class CoilFieldEntity extends Entity {
         if (tag.hasUUID("AnchorEntity")) {
             this.anchorEntityId = tag.getUUID("AnchorEntity");
         }
+        if (tag.hasUUID("Owner")) {
+            this.ownerUUID = tag.getUUID("Owner");
+        }
     }
 
     @Override
@@ -61,6 +76,9 @@ public class CoilFieldEntity extends Entity {
         tag.putInt("DamageCooldown", this.damageCooldownTicks);
         if (this.anchorEntityId != null) {
             tag.putUUID("AnchorEntity", this.anchorEntityId);
+        }
+        if (this.ownerUUID != null) {
+            tag.putUUID("Owner", this.ownerUUID);
         }
     }
 
@@ -98,7 +116,8 @@ public class CoilFieldEntity extends Entity {
         DamageSource source = this.damageSources().fellOutOfWorld();
 
         for (LivingEntity target : targets) {
-            if (this.overlapsShockSphere(target.getBoundingBox())) {
+            if ((this.ownerUUID == null || !this.ownerUUID.equals(target.getUUID()))
+                    && this.overlapsShockSphere(target.getBoundingBox())) {
                 Vec3 previousMotion = target.getDeltaMovement();
                 target.hurt(source, 1.0F);
                 target.setDeltaMovement(previousMotion);

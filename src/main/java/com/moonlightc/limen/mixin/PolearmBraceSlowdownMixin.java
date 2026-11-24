@@ -1,12 +1,17 @@
 package com.moonlightc.limen.mixin;
 
 import com.moonlightc.limen.item.PoweredPolearmItem;
+import com.moonlightc.limen.item.PoweredExoskeletonItem;
 import com.moonlightc.limen.item.RoyalPolearmItem;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * While an item is in use {@code LocalPlayer.aiStep()} multiplies the movement input
@@ -26,11 +31,32 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
  *
  * <p>Uses plain Mixin {@code @ModifyConstant} rather than MixinExtras: MixinExtras is bundled by Forge only at
  * runtime, not on the compile classpath, and the sponge annotation processor does not emit a refmap entry for
- * MixinExtras annotations. {@code @ModifyConstant} is handled natively by that AP. Both {@code 0.2F} occurrences
- * in {@code aiStep} are wrapped, but the guard only returns {@code 1.0F} while bracing a polearm.
+ * MixinExtras annotations. {@code @ModifyConstant} is handled natively by that AP. The guard returns {@code 1.0F}
+ * while bracing a polearm or using an item whose slowdown the powered exoskeleton cancels.
  */
 @Mixin(LocalPlayer.class)
 public abstract class PolearmBraceSlowdownMixin {
+    @Unique
+    private boolean limen$keepSprintDuringGearUse;
+
+    @Inject(method = "aiStep", at = @At("HEAD"))
+    private void limen$captureSprint(CallbackInfo ci) {
+        LocalPlayer player = (LocalPlayer) (Object) this;
+        this.limen$keepSprintDuringGearUse = player.isSprinting()
+                && PoweredExoskeletonItem.shouldIgnoreUseSlowdown(player, player.getUseItem());
+    }
+
+    @Inject(method = "aiStep", at = @At("RETURN"))
+    private void limen$restoreSprint(CallbackInfo ci) {
+        LocalPlayer player = (LocalPlayer) (Object) this;
+        if (this.limen$keepSprintDuringGearUse
+                && PoweredExoskeletonItem.shouldIgnoreUseSlowdown(player, player.getUseItem())
+                && !player.isCrouching()
+                && player.input.forwardImpulse > 0.0F) {
+            player.setSprinting(true);
+        }
+    }
+
     @ModifyConstant(method = "aiStep", constant = @Constant(floatValue = 0.2F))
     private float limen$cancelBraceSlowdown(float original) {
         LocalPlayer player = (LocalPlayer) (Object) this;
@@ -38,6 +64,9 @@ public abstract class PolearmBraceSlowdownMixin {
             return original;
         }
         ItemStack use = player.getUseItem();
+        if (PoweredExoskeletonItem.shouldIgnoreUseSlowdown(player, use)) {
+            return 1.0F;
+        }
         if (use.getItem() instanceof RoyalPolearmItem || use.getItem() instanceof PoweredPolearmItem) {
             return 1.0F;
         }

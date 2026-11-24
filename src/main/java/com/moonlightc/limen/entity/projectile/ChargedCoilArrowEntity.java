@@ -38,7 +38,12 @@ public class ChargedCoilArrowEntity extends Arrow {
     protected void onHitBlock(BlockHitResult hitResult) {
         super.onHitBlock(hitResult);
         if (!this.level().isClientSide) {
-            this.level().addFreshEntity(new CoilFieldEntity(this.level(), hitResult.getLocation().x, hitResult.getLocation().y, hitResult.getLocation().z));
+            CoilFieldEntity field = new CoilFieldEntity(this.level(),
+                    hitResult.getLocation().x, hitResult.getLocation().y, hitResult.getLocation().z);
+            if (this.getOwner() != null) {
+                field.setOwner(this.getOwner());
+            }
+            this.level().addFreshEntity(field);
         }
     }
 
@@ -46,7 +51,7 @@ public class ChargedCoilArrowEntity extends Arrow {
     protected void onHitEntity(EntityHitResult hitResult) {
         super.onHitEntity(hitResult);
         if (!this.level().isClientSide) {
-            this.level().addFreshEntity(new CoilFieldEntity(this.level(), hitResult.getEntity()));
+            this.level().addFreshEntity(new CoilFieldEntity(this.level(), hitResult.getEntity(), this.getOwner()));
             this.discard();
         }
     }

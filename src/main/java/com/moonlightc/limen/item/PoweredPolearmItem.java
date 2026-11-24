@@ -35,7 +35,7 @@ public class PoweredPolearmItem extends SwordItem {
     }
 
     public PoweredPolearmItem(Tier tier, Properties properties) {
-        super(tier, 4, -2.8F, properties);
+        super(tier, 4, -3.13F, properties);
         ImmutableMultimap.Builder<Attribute, AttributeModifier> builder = ImmutableMultimap.builder();
         builder.putAll(super.getDefaultAttributeModifiers(EquipmentSlot.MAINHAND));
         builder.put(ForgeMod.ENTITY_REACH.get(), new AttributeModifier(
@@ -50,6 +50,9 @@ public class PoweredPolearmItem extends SwordItem {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand usedHand) {
         ItemStack stack = player.getItemInHand(usedHand);
+        if (usedHand == InteractionHand.MAIN_HAND && PolearmUseHelper.hasOffhandUseAction(player)) {
+            return InteractionResultHolder.pass(stack);
+        }
         if (!LimenPlayerSkills.hasPolearmCombatTechniques(player)) {
             return InteractionResultHolder.fail(stack);
         }

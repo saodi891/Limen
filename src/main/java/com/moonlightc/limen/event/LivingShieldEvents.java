@@ -3,7 +3,6 @@ package com.moonlightc.limen.event;
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.item.LivingShieldItem;
 import com.moonlightc.limen.registry.ModItems;
-import com.moonlightc.limen.registry.ModMobEffects;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -40,7 +39,7 @@ public final class LivingShieldEvents {
         holder.level().playSound(null, holder.getX(), holder.getY(), holder.getZ(), SoundEvents.RAVAGER_ROAR, SoundSource.PLAYERS, 1.0F, 1.0F);
 
         for (LivingEntity target : holder.level().getEntitiesOfClass(LivingEntity.class, holder.getBoundingBox().inflate(ROAR_RADIUS), living -> shouldAffect(holder, living))) {
-            target.addEffect(new MobEffectInstance(ModMobEffects.SHOCKED.get(), 40, 0));
+            target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 40, 3));
             target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 100, 3));
         }
     }

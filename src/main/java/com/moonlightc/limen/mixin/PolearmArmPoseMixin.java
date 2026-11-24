@@ -3,6 +3,7 @@ package com.moonlightc.limen.mixin;
 import com.moonlightc.limen.client.PolearmPoseState;
 import com.moonlightc.limen.item.PoweredPolearmItem;
 import com.moonlightc.limen.item.RoyalPolearmItem;
+import com.moonlightc.limen.registry.ModItems;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
@@ -10,6 +11,7 @@ import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.CrossbowItem;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -59,6 +61,37 @@ public abstract class PolearmArmPoseMixin {
 
     @Shadow
     public ModelPart leftArm;
+
+    @Shadow
+    public HumanoidModel.ArmPose rightArmPose;
+
+    @Shadow
+    public HumanoidModel.ArmPose leftArmPose;
+
+    @Inject(method = "setupAnim", at = @At("HEAD"))
+    private void limen$keepOffhandCrossbowPoseOneHanded(LivingEntity entity, float limbSwing,
+                                                        float limbSwingAmount, float ageInTicks,
+                                                        float netHeadYaw, float headPitch, CallbackInfo ci) {
+        if (!(entity instanceof Player player)) {
+            return;
+        }
+        ItemStack offhand = player.getOffhandItem();
+        if (!offhand.is(ModItems.ELECTROMAGNETIC_CROSSBOW.get())) {
+            return;
+        }
+        boolean crossbowPose = CrossbowItem.isCharged(offhand)
+                || player.isUsingItem() && player.getUsedItemHand() == net.minecraft.world.InteractionHand.OFF_HAND;
+        if (!crossbowPose) {
+            return;
+        }
+
+        // The offhand crossbow's pull/hold pose is otherwise allowed to rewrite the offhand arm.
+        if (player.getMainArm() == HumanoidArm.RIGHT) {
+            this.leftArmPose = HumanoidModel.ArmPose.ITEM;
+        } else {
+            this.rightArmPose = HumanoidModel.ArmPose.ITEM;
+        }
+    }
 
     @Inject(method = "setupAnim", at = @At("TAIL"))
     private void limen$polearmChargeAim(LivingEntity entity, float limbSwing, float limbSwingAmount,

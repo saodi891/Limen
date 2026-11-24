@@ -4,10 +4,14 @@ import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.registry.ModMobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.FlyingMob;
+import net.minecraft.world.entity.ambient.Bat;
+import net.minecraft.world.entity.monster.Phantom;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
+import net.minecraftforge.event.entity.living.MobEffectEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -15,8 +19,8 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * Server-authoritative immobilization for the Shocked effect. The movement-speed modifier on
  * {@link com.moonlightc.limen.effect.ShockedMobEffect} roots the attribute; these handlers additionally zero
- * velocity, stop AI, cancel jumps, and absorb knockback so every living entity is truly held for the
- * duration. No pre-shock state is stored, so movement/AI resume naturally the moment the effect ends.
+ * horizontal velocity, stop AI, cancel jumps, and absorb knockback. Flight-capable mobs retain normal gravity
+ * so they fall while stunned. No pre-shock state is stored, so movement/AI resume naturally when the effect ends.
  */
 @Mod.EventBusSubscriber(modid = Limen.MODID)
 public final class ShockedEffectEvents {
@@ -33,6 +37,9 @@ public final class ShockedEffectEvents {
         Vec3 movement = entity.getDeltaMovement();
         entity.setDeltaMovement(0.0D, Math.min(movement.y, 0.0D), 0.0D);
         entity.hurtMarked = true;
+        if (isFlightCapable(entity)) {
+            entity.setNoGravity(false);
+        }
 
         if (entity instanceof Mob mob) {
             mob.getNavigation().stop();
@@ -67,8 +74,21 @@ public final class ShockedEffectEvents {
             return;
         }
 
+        player.stopFallFlying();
         Vec3 movement = player.getDeltaMovement();
         player.setDeltaMovement(0.0D, Math.min(movement.y, 0.0D), 0.0D);
         player.setSprinting(false);
+    }
+
+    @SubscribeEvent
+    public static void onEffectAdded(MobEffectEvent.Added event) {
+        if (event.getEffectInstance().getEffect() == ModMobEffects.SHOCKED.get()
+                && event.getEntity() instanceof Player player) {
+            player.stopFallFlying();
+        }
+    }
+
+    private static boolean isFlightCapable(LivingEntity entity) {
+        return entity instanceof FlyingMob || entity instanceof Bat || entity instanceof Phantom;
     }
 }

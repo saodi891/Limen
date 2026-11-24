@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:vindicator",
+    "minecraft:pillager",
+    "minecraft:evoker",
+    "minecraft:ravager",
+    "minecraft:illusioner",
+    "limen:tower_guard"
+  ]
+}

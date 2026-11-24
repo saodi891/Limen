@@ -41,6 +41,8 @@ public class CampfireBrewMenu extends AbstractContainerMenu {
     private static final int MAIN_INV_END = 30;
 
     private static final ResourceLocation BREWERY_ADVANCEMENT =
+
+
             new ResourceLocation("minecraft", "nether/brew_potion");
 
     private final ContainerLevelAccess access;

@@ -1,6 +1,7 @@
 package com.moonlightc.limen.mixin;
 
 import com.moonlightc.limen.registry.ModEnchantments;
+import com.moonlightc.limen.registry.ModItems;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
@@ -24,6 +25,10 @@ public abstract class ItemStackMixin {
     )
     private int limen$applyErosionCurse(int amount) {
         ItemStack stack = (ItemStack) (Object) this;
+        if (stack.is(ModItems.POWERED_EXOSKELETON.get())) {
+            int remainingBeforeBreak = stack.getMaxDamage() - stack.getDamageValue() - 1;
+            return Math.max(0, Math.min(amount, remainingBeforeBreak));
+        }
         if (amount <= 0
                 || stack.getItem() instanceof ArmorItem
                 || EnchantmentHelper.getItemEnchantmentLevel(ModEnchantments.EROSION_CURSE.get(), stack) <= 0) {

@@ -5,13 +5,21 @@
   "minVersion": "0.8",
   "refmap": "limen.refmap.json",
   "mixins": [
-    "ItemStackMixin"
+    "ItemStackMixin",
+    "DeflectedArrowMixin",
+    "ElectromagneticCrossbowMixin",
+    "MechanicTrappedAiMixin",
+    "MechanicTrappedVillagerMixin",
+    "PamaEntityQueryMixin"
   ],
   "client": [
     "CameraMixin",
     "ItemInHandLayerMixin",
+    "ElectromagneticCrossbowHandRenderMixin",
+    "MechanicTrappedRendererMixin",
     "PolearmArmPoseMixin",
     "PolearmBraceSlowdownMixin",
+    "PamaEntityPickingMixin",
     "ScreenEffectRendererMixin"
   ],
   "injectors": {

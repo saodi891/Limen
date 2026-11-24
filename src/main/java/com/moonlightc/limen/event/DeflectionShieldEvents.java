@@ -19,9 +19,10 @@ import java.util.List;
 
 @Mod.EventBusSubscriber(modid = Limen.MODID)
 public final class DeflectionShieldEvents {
-    private static final double DEFLECT_RANGE = 5.0D;
-    private static final double TARGET_RANGE = 18.0D;
+    private static final double DEFLECT_RANGE = 2.0D;
+    private static final double TARGET_RANGE = 10.0D;
     private static final String DEFLECTED_TAG = "LimenDeflectedByShield";
+    public static final String STEERING_TARGET_TAG = "LimenDeflectionTarget";
 
     private DeflectionShieldEvents() {
     }
@@ -43,7 +44,7 @@ public final class DeflectionShieldEvents {
         }
 
         Vec3 look = player.getLookAngle().normalize();
-        AABB scanBox = player.getBoundingBox().inflate(DEFLECT_RANGE).expandTowards(look.scale(DEFLECT_RANGE));
+        AABB scanBox = player.getBoundingBox().inflate(DEFLECT_RANGE);
         List<AbstractArrow> arrows = player.level().getEntitiesOfClass(AbstractArrow.class, scanBox, arrow -> shouldDeflect(player, arrow, look));
         for (AbstractArrow arrow : arrows) {
             redirectArrow(player, arrow);
@@ -77,16 +78,24 @@ public final class DeflectionShieldEvents {
         }
 
         Vec3 targetPos = target.getEyePosition().add(0.0D, -0.15D, 0.0D);
-        Vec3 direction = targetPos.subtract(arrow.position());
-        if (direction.lengthSqr() < 0.01D) {
+        Vec3 toTarget = targetPos.subtract(arrow.position());
+        if (toTarget.lengthSqr() < 0.01D) {
             return;
         }
 
-        double speed = Math.max(arrow.getDeltaMovement().length(), 2.8D);
-        Vec3 newMotion = direction.normalize().scale(speed + 0.7D);
+        Vec3 incoming = arrow.getDeltaMovement();
+        double incomingSpeed = incoming.length();
+        double speed = Math.max(incomingSpeed, 2.8D) + 0.2D;
+        Vec3 look = player.getLookAngle().normalize();
+        Vec3 newMotion = incoming.subtract(look.scale(2.0D * incoming.dot(look)));
+        if (newMotion.lengthSqr() < 1.0E-6D) {
+            newMotion = look;
+        }
+        newMotion = newMotion.normalize().scale(speed);
 
         arrow.setDeltaMovement(newMotion);
         arrow.setOwner(player);
+        arrow.getPersistentData().putUUID(STEERING_TARGET_TAG, target.getUUID());
         arrow.setYRot((float) (Mth.atan2(newMotion.x, newMotion.z) * (180F / (float) Math.PI)));
         arrow.setXRot((float) (Mth.atan2(newMotion.y, newMotion.horizontalDistance()) * (180F / (float) Math.PI)));
         arrow.getPersistentData().putBoolean(DEFLECTED_TAG, true);
@@ -95,7 +104,9 @@ public final class DeflectionShieldEvents {
 
     private static LivingEntity findTarget(Player player, AbstractArrow arrow) {
         AABB searchBox = arrow.getBoundingBox().inflate(TARGET_RANGE);
-        return player.level().getEntitiesOfClass(LivingEntity.class, searchBox, target -> isValidTarget(player, target))
+        double targetRangeSqr = TARGET_RANGE * TARGET_RANGE;
+        return player.level().getEntitiesOfClass(LivingEntity.class, searchBox,
+                        target -> isValidTarget(player, target) && target.distanceToSqr(arrow) <= targetRangeSqr)
                 .stream()
                 .min(Comparator.comparingDouble(target -> target.distanceToSqr(arrow)))
                 .orElse(null);

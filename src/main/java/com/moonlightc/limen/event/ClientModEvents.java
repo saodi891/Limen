@@ -4,10 +4,15 @@ import com.moonlightc.limen.entity.client.AutonomousSpiderRenderer;
 import com.moonlightc.limen.entity.client.ChargedCoilArrowRenderer;
 import com.moonlightc.limen.entity.client.CoilFieldRenderer;
 import com.moonlightc.limen.entity.client.EniacRenderer;
+import com.moonlightc.limen.entity.client.MechanicTrappedModel;
 import com.moonlightc.limen.entity.client.PamaDetectorRenderer;
+import com.moonlightc.limen.entity.client.PamaRenderer;
 import com.moonlightc.limen.entity.client.SilkBabyRenderer;
 import com.moonlightc.limen.entity.client.SkeletonChippedRenderer;
 import com.moonlightc.limen.entity.client.ZombieChippedRenderer;
+import com.moonlightc.limen.entity.client.TowerGuardRenderer;
+import com.moonlightc.limen.entity.client.TowerGhostRenderer;
+import com.moonlightc.limen.entity.client.TowerGhostBlueFlameRenderer;
 import com.moonlightc.limen.item.LivingShieldItem;
 import com.moonlightc.limen.registry.ModEntities;
 import com.moonlightc.limen.registry.ModItems;
@@ -31,6 +36,11 @@ public final class ClientModEvents {
     }
 
     @SubscribeEvent
+    public static void registerModelLayers(EntityRenderersEvent.RegisterLayerDefinitions event) {
+        event.registerLayerDefinition(MechanicTrappedModel.LAYER_LOCATION, MechanicTrappedModel::createBodyLayer);
+    }
+
+    @SubscribeEvent
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.CHARGED_COIL_ARROW.get(), ChargedCoilArrowRenderer::new);
         event.registerEntityRenderer(ModEntities.PAMA_TRIDENT.get(), com.moonlightc.limen.entity.client.PamaTridentRenderer::new);
@@ -38,9 +48,13 @@ public final class ClientModEvents {
                 net.minecraft.client.renderer.entity.ThrownItemRenderer::new);
         event.registerEntityRenderer(ModEntities.COIL_FIELD.get(), CoilFieldRenderer::new);
         event.registerEntityRenderer(ModEntities.PAMA_DETECTOR.get(), PamaDetectorRenderer::new);
+        event.registerEntityRenderer(ModEntities.PAMA.get(), PamaRenderer::new);
         event.registerEntityRenderer(ModEntities.AUTONOMOUS_SPIDER.get(), AutonomousSpiderRenderer::new);
         event.registerEntityRenderer(ModEntities.SILK_BABY.get(), SilkBabyRenderer::new);
         event.registerEntityRenderer(ModEntities.ENIAC.get(), EniacRenderer::new);
+        event.registerEntityRenderer(ModEntities.TOWER_GUARD.get(), TowerGuardRenderer::new);
+        event.registerEntityRenderer(ModEntities.TOWER_GHOST.get(), TowerGhostRenderer::new);
+        event.registerEntityRenderer(ModEntities.SOUL_FLAME.get(), TowerGhostBlueFlameRenderer::new);
         event.registerEntityRenderer(ModEntities.SKELETON_CHIPPED.get(), SkeletonChippedRenderer::new);
         event.registerEntityRenderer(ModEntities.ZOMBIE_CHIPPED.get(), ZombieChippedRenderer::new);
         event.registerEntityRenderer(ModEntities.TOTEM_OF_RELINK.get(),
@@ -81,6 +95,9 @@ public final class ClientModEvents {
                     (stack, level, entity, seed) -> isPulling(stack, entity) ? 1.0F : 0.0F);
             ItemProperties.register(ModItems.ELECTROMAGNETIC_CROSSBOW.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "charged"),
                     (stack, level, entity, seed) -> CrossbowItem.isCharged(stack) ? 1.0F : 0.0F);
+            ItemProperties.register(ModItems.POWERED_EXOSKELETON.get(), com.moonlightc.limen.Limen.id("broken"),
+                    (stack, level, entity, seed) -> com.moonlightc.limen.item.PoweredExoskeletonItem.isWornOut(stack)
+                            ? 1.0F : 0.0F);
             ItemProperties.register(ModItems.LIVING_SHIELD.get(), ResourceLocation.fromNamespaceAndPath("minecraft", "blocking"),
                     (stack, level, entity, seed) -> entity != null && entity.isUsingItem() && entity.getUseItem() == stack ? 1.0F : 0.0F);
             ItemProperties.register(ModItems.LIVING_SHIELD.get(), com.moonlightc.limen.Limen.id("charged"),

@@ -4,14 +4,18 @@ import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.entity.monster.AutonomousSpiderEntity;
 import com.moonlightc.limen.entity.monster.EniacEntity;
 import com.moonlightc.limen.entity.monster.PamaDetectorEntity;
+import com.moonlightc.limen.entity.monster.PamaEntity;
 import com.moonlightc.limen.entity.monster.SilkBabyEntity;
 import com.moonlightc.limen.entity.monster.SkeletonChippedEntity;
 import com.moonlightc.limen.entity.monster.ZombieChippedEntity;
+import com.moonlightc.limen.entity.monster.TowerGuardEntity;
+import com.moonlightc.limen.entity.monster.TowerGhostEntity;
 import com.moonlightc.limen.entity.misc.TotemOfRelinkEntity;
 import com.moonlightc.limen.entity.projectile.ChargedCoilArrowEntity;
 import com.moonlightc.limen.entity.projectile.CoilFieldEntity;
 import com.moonlightc.limen.entity.projectile.PamaEnderPearlEntity;
 import com.moonlightc.limen.entity.projectile.PamaTridentEntity;
+import com.moonlightc.limen.entity.projectile.TowerGhostBlueFlameEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -28,6 +32,16 @@ public final class ModEntities {
                     .sized(0.7F, 0.7F)
                     .clientTrackingRange(8)
                     .build(Limen.id("pama_detector").toString())
+    );
+
+    public static final RegistryObject<EntityType<PamaEntity>> PAMA = ENTITIES.register(
+            "pama",
+            () -> EntityType.Builder.of(PamaEntity::new, MobCategory.MONSTER)
+                    .sized(32.0F, 27.0F)
+                    .clientTrackingRange(16)
+                    .updateInterval(1)
+                    .fireImmune()
+                    .build(Limen.id("pama").toString())
     );
 
     public static final RegistryObject<EntityType<ChargedCoilArrowEntity>> CHARGED_COIL_ARROW = ENTITIES.register(
@@ -88,6 +102,33 @@ public final class ModEntities {
                     .sized(0.6F, 1.8F)
                     .clientTrackingRange(8)
                     .build(Limen.id("eniac").toString())
+    );
+
+    public static final RegistryObject<EntityType<TowerGuardEntity>> TOWER_GUARD = ENTITIES.register(
+            "tower_guard",
+            () -> EntityType.Builder.of(TowerGuardEntity::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.95F)
+                    .clientTrackingRange(8)
+                    .updateInterval(1)
+                    .build(Limen.id("tower_guard").toString())
+    );
+
+    public static final RegistryObject<EntityType<TowerGhostEntity>> TOWER_GHOST = ENTITIES.register(
+            "tower_wraith",
+            () -> EntityType.Builder.of(TowerGhostEntity::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.95F)
+                    .clientTrackingRange(8)
+                    .updateInterval(1)
+                    .build(Limen.id("tower_wraith").toString())
+    );
+
+    public static final RegistryObject<EntityType<TowerGhostBlueFlameEntity>> SOUL_FLAME = ENTITIES.register(
+            "soul_flame",
+            () -> EntityType.Builder.<TowerGhostBlueFlameEntity>of(TowerGhostBlueFlameEntity::new, MobCategory.MISC)
+                    .sized(0.7F, 0.7F)
+                    .clientTrackingRange(8)
+                    .updateInterval(1)
+                    .build(Limen.id("soul_flame").toString())
     );
 
     public static final RegistryObject<EntityType<ZombieChippedEntity>> ZOMBIE_CHIPPED = ENTITIES.register(

@@ -4,6 +4,7 @@ import com.moonlightc.limen.api.tag.LimenEntityTypeTags;
 import com.moonlightc.limen.config.LimenCommonConfig;
 import com.moonlightc.limen.registry.ModBlocks;
 import com.moonlightc.limen.registry.ModEntities;
+import com.moonlightc.limen.registry.ModMobEffects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
@@ -18,6 +19,7 @@ import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
@@ -52,6 +54,8 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
     private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
     @Nullable
     private UUID lockedPlayerId;
+    @Nullable
+    private UUID commandedPamaId;
     private int glowingCooldownTicks = LimenCommonConfig.PAMA_DETECTOR_LOCK_COOLDOWN_TICKS.get();
 
     public PamaDetectorEntity(EntityType<? extends FlyingMob> entityType, Level level) {
@@ -81,6 +85,7 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
 
     @Override
     protected void registerGoals() {
+        this.goalSelector.addGoal(0, new RecallToPamaGoal(this));
         this.goalSelector.addGoal(4, new ReviveAutonomousSpiderGoal(this));
         this.goalSelector.addGoal(5, new ApproachDetectedPlayerGoal(this));
         this.goalSelector.addGoal(6, new HoverAroundGoal(this));
@@ -95,10 +100,42 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
     @Override
     public void tick() {
         super.tick();
-        this.setNoGravity(true);
-        if (!this.level().isClientSide) {
+        this.setNoGravity(!this.hasEffect(ModMobEffects.SHOCKED.get()));
+        if (!this.level().isClientSide && this.commandedPamaId == null) {
             this.updateLocking();
         }
+    }
+
+    public void commandRecallTo(PamaEntity pama) {
+        if (!this.level().isClientSide && this.isAlive() && pama.isAlive()) {
+            this.commandedPamaId = pama.getUUID();
+        }
+    }
+
+    @Nullable
+    private PamaEntity getCommandedPama() {
+        if (this.commandedPamaId == null) {
+            return null;
+        }
+        return PamaEntity.loadedIn(this.level()).stream()
+                .filter(PamaEntity::isAlive)
+                .filter(pama -> pama.getUUID().equals(this.commandedPamaId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
+        if (this.commandedPamaId != null) {
+            tag.putUUID("CommandedPama", this.commandedPamaId);
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag) {
+        super.readAdditionalSaveData(tag);
+        this.commandedPamaId = tag.hasUUID("CommandedPama") ? tag.getUUID("CommandedPama") : null;
     }
 
     @Override
@@ -310,6 +347,67 @@ public class PamaDetectorEntity extends FlyingMob implements Enemy, GeoEntity {
 
     private static boolean isRedstoneMachine(LivingEntity entity) {
         return entity.getType().is(LimenEntityTypeTags.REDSTONE_MACHINES);
+    }
+
+    private static class RecallToPamaGoal extends Goal {
+        private static final double ARRIVAL_INFLATION = 1.0D;
+        private final PamaDetectorEntity detector;
+        @Nullable
+        private PamaEntity pama;
+
+        RecallToPamaGoal(PamaDetectorEntity detector) {
+            this.detector = detector;
+            this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+        }
+
+        @Override
+        public boolean canUse() {
+            this.pama = this.detector.getCommandedPama();
+            if (this.detector.commandedPamaId != null && this.pama == null) {
+                this.detector.commandedPamaId = null;
+            }
+            return this.pama != null;
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return this.pama != null
+                    && this.pama.isAlive()
+                    && this.detector.commandedPamaId != null
+                    && this.detector.commandedPamaId.equals(this.pama.getUUID());
+        }
+
+        @Override
+        public void tick() {
+            if (this.pama == null) {
+                return;
+            }
+
+            if (this.pama.getBoundingBox().inflate(ARRIVAL_INFLATION)
+                    .intersects(this.detector.getBoundingBox())) {
+                this.pama.heal(5.0F);
+                this.detector.commandedPamaId = null;
+                this.detector.discard();
+                return;
+            }
+
+            this.detector.getLookControl().setLookAt(this.pama, 30.0F, 30.0F);
+            this.detector.getMoveControl().setWantedPosition(
+                    this.pama.getX(),
+                    this.pama.getY() + PamaEntity.COLLISION_HEIGHT * 0.5D,
+                    this.pama.getZ(),
+                    1.0D);
+        }
+
+        @Override
+        public void stop() {
+            this.pama = null;
+        }
+
+        @Override
+        public boolean requiresUpdateEveryTick() {
+            return true;
+        }
     }
 
     private static class ReviveAutonomousSpiderGoal extends Goal {

@@ -80,6 +80,15 @@ mixin {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
+    // These libraries ship with Minecraft 1.20.1 at runtime, but ForgeGradle does not
+    // currently expose them on this project's Java compile classpath. Keep them
+    // compile-only so they are not bundled into the mod jar.
+    compileOnly 'com.mojang:datafixerupper:6.0.8'
+    compileOnly 'com.mojang:brigadier:1.1.8'
+    compileOnly 'io.netty:netty-buffer:4.1.82.Final'
+    compileOnly 'org.joml:joml:1.10.5'
+
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}")
     compileOnly fg.deobf("vazkii.patchouli:Patchouli:1.20.1-85-FORGE:api")
     runtimeOnly fg.deobf("vazkii.patchouli:Patchouli:1.20.1-85-FORGE")

@@ -3,6 +3,7 @@
   "values": [
     "limen:autonomous_spider",
     "limen:eniac",
+    "limen:pama",
     "limen:pama_detector",
     "limen:skeleton_chipped",
     "limen:zombie_chipped"

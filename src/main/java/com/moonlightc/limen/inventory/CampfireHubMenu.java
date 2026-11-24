@@ -21,12 +21,11 @@ import net.minecraft.world.level.block.CampfireBlock;
  * Options hub opened by holding a marshmallow over a lit campfire at night. Replaces the roasting
  * station: it owns no slots, only a 3x2 button grid handled server-side through {@link #clickMenuButton}.
  *
- * <p>Only Rest and Exit are wired this iteration; the remaining four buttons are accepted but do
- * nothing yet. Pressing any button other than Exit registers the player as resting: the night only
- * fast-forwards once enough players rest or sleep to meet the {@code playersSleepingPercentage}
- * threshold (see {@link com.moonlightc.limen.event.CampfireRestManager}), and resting deliberately does
- * <em>not</em> set the player's respawn point. Rest additionally grants Regeneration II for five seconds
- * and roasts the held marshmallow into its cooked counterpart.
+ * <p>Rest is a campfire use immediately; completed mend, enchant and brew actions count when their result
+ * is taken. Other placeholder buttons do not count. Campfire users cannot use beds that night and are
+ * excluded from the bed-sleep percentage; if every active Overworld player uses a campfire, the night skips.
+ * Rest deliberately does <em>not</em> set the player's respawn point. It additionally grants Regeneration II
+ * for five seconds and roasts the held marshmallow into its cooked counterpart.
  */
 public class CampfireHubMenu extends AbstractContainerMenu implements CampfireScene {
     public static final int BUTTON_REST = 0;
@@ -125,15 +124,8 @@ public class CampfireHubMenu extends AbstractContainerMenu implements CampfireSc
         }
         if (player instanceof ServerPlayer serverPlayer) {
             if (id == BUTTON_REST) {
-                // Rest is the one wired reward: the regen burst, a roasted marshmallow and a vote to skip the
-                // night, all bundled into grantRestReward.
+                // Rest immediately counts as this player's campfire use for the night.
                 grantRestReward(serverPlayer);
-            } else {
-                // Any other non-exit button (the WEAVE placeholder) still counts the player as resting — a vote
-                // to skip the night, like climbing into a bed — but earns no reward yet. The night only
-                // fast-forwards once enough players rest or sleep (see CampfireRestManager), so campfire rest and
-                // bed sleep stack toward the same playersSleepingPercentage threshold.
-                CampfireRestManager.addResting(serverPlayer);
             }
         }
         player.closeContainer();
@@ -142,7 +134,7 @@ public class CampfireHubMenu extends AbstractContainerMenu implements CampfireSc
 
     /**
      * The full campfire-rest reward for pressing Rest: Regeneration II for five seconds on top of the shared
-     * craft reward (roasted marshmallow + a vote to skip the night).
+     * craft reward (roasted marshmallow + campfire use for the night).
      */
     public static void grantRestReward(ServerPlayer player) {
         player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, REGEN_TICKS, REGEN_AMPLIFIER));
@@ -151,9 +143,9 @@ public class CampfireHubMenu extends AbstractContainerMenu implements CampfireSc
 
     /**
      * The craft-completion reward shared by the mend, enchant and brew sub-screens: the held marshmallow roasted
-     * into its cooked counterpart and the player counted as resting (a vote to skip the night). Deliberately omits
-     * Regeneration — that is reserved for players who actually choose Rest. Also marks the player as having used
-     * the campfire tonight ({@link #markSpentTonight}): one craft per night, after which the sub-menus lock.
+     * into its cooked counterpart. Deliberately omits Regeneration — that is reserved for players who actually
+     * choose Rest. Also marks the player as having used the campfire tonight ({@link #markSpentTonight}): one
+     * craft per night, after which the sub-menus lock.
      */
     public static void grantCraftReward(ServerPlayer player) {
         for (InteractionHand hand : InteractionHand.values()) {
@@ -163,8 +155,8 @@ public class CampfireHubMenu extends AbstractContainerMenu implements CampfireSc
                 break;
             }
         }
-        CampfireRestManager.addResting(player);
         markSpentTonight(player);
+        CampfireRestManager.onCampfireUsed(player);
     }
 
     /** Records that the player has used the campfire tonight (one craft/rest per night). */

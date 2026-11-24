@@ -13,6 +13,7 @@ import com.moonlightc.limen.registry.ModMenuTypes;
 import com.moonlightc.limen.registry.ModRecipes;
 import com.moonlightc.limen.registry.ModMobEffects;
 import com.moonlightc.limen.registry.ModSounds;
+import com.moonlightc.limen.registry.ModVillagers;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -39,6 +40,7 @@ public final class Limen {
         ModEnchantments.register(modBus);
         ModMobEffects.register(modBus);
         ModSounds.register(modBus);
+        ModVillagers.register(modBus);
         ModCreativeTabs.register(modBus);
         ModConfigs.register();
 

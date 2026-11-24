@@ -8,6 +8,9 @@ import net.minecraft.world.item.ArrowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
 import java.util.function.Predicate;
@@ -18,12 +21,27 @@ public class ElectromagneticCrossbowItem extends CrossbowItem {
     public static final int MODEL_NONE = 0;
     public static final int MODEL_SPECTRAL = 1;
     public static final int MODEL_COIL = 2;
+    /** 91 blocks per second at 20 game ticks per second, before crossbow spread. */
+    public static final float ARROW_SPEED = 4.55F;
 
     // Gametime the current overclock auto-reload began; absent when not auto-reloading.
     public static final String AUTO_RELOAD_START_TAG = "LimenAutoReloadStart";
 
     public ElectromagneticCrossbowItem(Properties properties) {
         super(properties);
+    }
+
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!CrossbowItem.isCharged(stack)) {
+            return super.use(level, player, hand);
+        }
+
+        CrossbowItem.performShooting(level, player, hand, stack, ARROW_SPEED, 1.0F);
+        CrossbowItem.setCharged(stack, false);
+        syncChargedModelData(stack);
+        return InteractionResultHolder.consume(stack);
     }
 
     @Override

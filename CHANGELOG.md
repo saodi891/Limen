@@ -1,0 +1,14 @@
+# Limen 0.2.1 Changelog
+
+## Additions
+
+- **Tower Guard** — added a new Illager elite with a spawn egg and creative-tab entry. It wields the Royal Polearm cosmetically, has 24 health and 10 armor, and deals 14/20/26 damage on Easy/Normal/Hard. After three successful normal hits, its next attack becomes a shield-disabling, line-of-sight AOE dealing 90% attack damage. It can also charge once every 10 seconds, with speed-scaled damage and shield-break behavior.
+- **Charged Bread** — added a bread-like food that grants Protection IV to each worn armor piece when eaten.
+
+## Changes
+
+- **E.N.I.A.C** — Phase 1 now has 40 health and 50% general damage reduction. Its revive lasts 4.5 seconds. Skill C now performs three target-locked charges with a 0.3-second windup, jumps one-block obstacles where possible, and stops a charge on taller obstructions or shield breaks. Skill D handles elevated, unreachable targets with a retreat, trident throw, and three coil-arrow shots. Added leader resistance to non-vanilla harmful effects. Probe conversion and vanilla-block breaching work in all biomes; only source-water replacement and attempts to break waterlogged blocks are limited to deserts and badlands. ENIAC can target through cover and attack boats and minecarts.
+- **Shocked effect** — now immediately ends a player's Elytra flight. Flying mobs, including phantoms, bats, and PAMA probes, are forced to fall under normal gravity while shocked. The Ender Dragon and Wither remain unaffected because they are immune to potion effects.
+- **Polearm charges** — improved hit detection for Powered Polearm and Royal Polearm charges, including swept attack paths. The shared charge mechanic requires at least 3.6 m/s relative speed for the Powered Polearm and 4 m/s for the Royal Polearm, then calculates damage from forward closing speed with multipliers of 1.2 and 1.1 respectively. Polearm attacks only work from the main hand. Adjusted their attack attributes. ENIAC's Charged Iron Trident projectile is separate and has no minimum-speed restriction.
+- **Charge knockback and dismounts** — thresholds use directional closing speed (attacker velocity minus target velocity, projected onto the charge direction). The Powered Polearm, Royal Polearm, Tower Guard, and ENIAC knock targets back only above 5.1 m/s; polearm Knockback enchantment strength is also gated by that threshold. Charges dismount mounted targets above 7 m/s for the Powered Polearm and ENIAC, or 7.5 m/s for the Royal Polearm and Tower Guard. The Powered Polearm applies Shocked after its charge knockback.
+- **Shields** — the Living Shield roar now applies Slowness IV for 2 seconds and Weakness IV for 5 seconds. The Deflection Shield now scans within 2 blocks, seeks valid targets within 10 blocks, and boosts redirected arrows to `max(original speed, 2.8) + 0.2` blocks per tick with target steering.

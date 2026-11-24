@@ -22,6 +22,8 @@ public class EniacModel extends AbstractLimenGeoModel<EniacEntity> {
         super.setCustomAnimations(animatable, instanceId, animationState);
 
         updateHeldWeapon(animatable);
+        setHelmetVisible(animatable.getPhase() != 2);
+        setHeadVisible(animatable.getPhase() != 2);
 
         EntityModelData entityData = animationState.getData(DataTickets.ENTITY_MODEL_DATA);
         if (entityData == null) {
@@ -39,6 +41,13 @@ public class EniacModel extends AbstractLimenGeoModel<EniacEntity> {
     // held ItemStacks. ENIAC still equips the real items to drive melee damage; here we just show the bone
     // matching its state so two weapons are never visible at once.
     private void updateHeldWeapon(EniacEntity animatable) {
+        if (animatable.isReviving()) {
+            setWeaponVisible("pama_sword", false);
+            setWeaponVisible("pama_axe", false);
+            setWeaponVisible("power_polearm_3d", false);
+            setWeaponVisible("pama_axe2", false);
+            return;
+        }
         boolean skillC = animatable.isSkillCRunning();
         Item held = animatable.getMainHandItem().getItem();
         // During skillC the main hand always shows the powered polearm, even while the real main-hand item
@@ -49,6 +58,20 @@ public class EniacModel extends AbstractLimenGeoModel<EniacEntity> {
         // Off-hand break axe: only flashes during the skillC shield-break beat, which is the one moment the
         // main-hand item is swapped to the axe while skillC is running.
         setWeaponVisible("pama_axe2", skillC && held == ModItems.PAMA_AXE.get());
+    }
+
+    private void setHelmetVisible(boolean visible) {
+        this.getBone("Helmet").ifPresent(bone -> {
+            bone.setHidden(!visible);
+            bone.setChildrenHidden(!visible);
+        });
+    }
+
+    private void setHeadVisible(boolean visible) {
+        this.getBone("Head").ifPresent(bone -> {
+            bone.setHidden(!visible);
+            bone.setChildrenHidden(false);
+        });
     }
 
     private void setWeaponVisible(String boneName, boolean visible) {

@@ -3,13 +3,17 @@ package com.moonlightc.limen.registry;
 import com.moonlightc.limen.Limen;
 import com.moonlightc.limen.item.ChainswordItem;
 import com.moonlightc.limen.item.ChargedCoilArrowItem;
+import com.moonlightc.limen.item.ChargedBreadItem;
 import com.moonlightc.limen.item.ElectromagneticCrossbowItem;
 import com.moonlightc.limen.item.DeflectionShieldItem;
 import com.moonlightc.limen.item.LivingShieldItem;
+import com.moonlightc.limen.item.MechanicSpawnEggItem;
 import com.moonlightc.limen.item.MarshmallowOnABlazeRodItem;
 import com.moonlightc.limen.item.PatchouliBookItem;
 import com.moonlightc.limen.item.PolearmCombatTechniquesItem;
+import com.moonlightc.limen.item.PamaSpawnEggItem;
 import com.moonlightc.limen.item.PoweredPolearmItem;
+import com.moonlightc.limen.item.PoweredExoskeletonItem;
 import com.moonlightc.limen.item.RoastedMarshmallowItem;
 import com.moonlightc.limen.item.RoastedMarshmallowOnABlazeRodItem;
 import com.moonlightc.limen.item.RoyalPolearmItem;
@@ -20,6 +24,7 @@ import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import com.moonlightc.limen.entity.monster.PamaEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.Tiers;
@@ -39,6 +44,11 @@ public final class ModItems {
             () -> new ForgeSpawnEggItem(ModEntities.PAMA_DETECTOR, 0x2B3038, 0xD94A4A, new Item.Properties())
     );
 
+    public static final RegistryObject<Item> PAMA_SPAWN_EGG = ITEMS.register(
+            "pama_spawn_egg",
+            () -> new PamaSpawnEggItem(ModEntities.PAMA, 0x3B2926, 0xD8493F, new Item.Properties())
+    );
+
     public static final RegistryObject<Item> AUTONOMOUS_SPIDER_SPAWN_EGG = ITEMS.register(
             "autonomous_spider_spawn_egg",
             () -> new ForgeSpawnEggItem(ModEntities.AUTONOMOUS_SPIDER, 0x3C4046, 0xA61F2D, new Item.Properties())
@@ -52,6 +62,21 @@ public final class ModItems {
     public static final RegistryObject<Item> ENIAC_SPAWN_EGG = ITEMS.register(
             "eniac_spawn_egg",
             () -> new ForgeSpawnEggItem(ModEntities.ENIAC, 0x7D858A, 0xC73A3A, new Item.Properties())
+    );
+
+    public static final RegistryObject<Item> TOWER_GUARD_SPAWN_EGG = ITEMS.register(
+            "tower_guard_spawn_egg",
+            () -> new ForgeSpawnEggItem(ModEntities.TOWER_GUARD, 0x303645, 0xC6A85A, new Item.Properties())
+    );
+
+    public static final RegistryObject<Item> TOWER_GHOST_SPAWN_EGG = ITEMS.register(
+            "tower_ghost_spawn_egg",
+            () -> new ForgeSpawnEggItem(ModEntities.TOWER_GHOST, 0x25202F, 0x5B83E8, new Item.Properties())
+    );
+
+    public static final RegistryObject<Item> MECHANIC_SPAWN_EGG = ITEMS.register(
+            "mechanic_spawn_egg",
+            () -> new MechanicSpawnEggItem(new Item.Properties())
     );
 
     public static final RegistryObject<Item> ZOMBIE_CHIPPED_SPAWN_EGG = ITEMS.register(
@@ -86,6 +111,11 @@ public final class ModItems {
 
     public static final RegistryObject<Item> GOLDEN_SILK_THREAD = ITEMS.register(
             "golden_silk_thread",
+            () -> new Item(new Item.Properties())
+    );
+
+    public static final RegistryObject<Item> ROYAL_STAMPED_GOLD_INGOT = ITEMS.register(
+            "royal_stamped_gold_ingot",
             () -> new Item(new Item.Properties())
     );
 
@@ -189,6 +219,11 @@ public final class ModItems {
             () -> new DeflectionShieldItem(new Item.Properties().durability(336))
     );
 
+    public static final RegistryObject<Item> POWERED_EXOSKELETON = ITEMS.register(
+            "powered_exoskeleton",
+            () -> new PoweredExoskeletonItem(new Item.Properties())
+    );
+
     public static final RegistryObject<Item> ARTISAN_BOX = ITEMS.register(
             "artisan_box",
             () -> new com.moonlightc.limen.item.ArtisanBoxItem(ModBlocks.ARTISAN_BOX.get(), new Item.Properties().stacksTo(1))
@@ -228,6 +263,15 @@ public final class ModItems {
                     .build()))
     );
 
+    public static final RegistryObject<Item> CHARGED_BREAD = ITEMS.register(
+            "charged_bread",
+            () -> new ChargedBreadItem(new Item.Properties().food(new FoodProperties.Builder()
+                    .nutrition(5)
+                    .saturationMod(0.6F)
+                    .alwaysEat()
+                    .build()))
+    );
+
     public static final RegistryObject<Item> MARSHMALLOW_ONASTICK = ITEMS.register(
             "marshmallow_onastick",
             () -> new Item(new Item.Properties().stacksTo(1))
@@ -262,12 +306,12 @@ public final class ModItems {
 
     public static final RegistryObject<Item> ELECTROMAGNETIC_CROSSBOW_BLUEPRINT = ITEMS.register(
             "electromagnetic_crossbow_blueprint",
-            () -> new Item(new Item.Properties().stacksTo(1))
+            () -> new Item(new Item.Properties().stacksTo(16))
     );
 
     public static final RegistryObject<Item> POWERED_POLEARM_BLUEPRINT = ITEMS.register(
             "powered_polearm_blueprint",
-            () -> new Item(new Item.Properties().stacksTo(1))
+            () -> new Item(new Item.Properties().stacksTo(16))
     );
 
     private ModItems() {

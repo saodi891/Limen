@@ -1,4 +1,23 @@
 {
   "type": "minecraft:entity",
-  "pools": []
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "limen:electromagnetic_crossbow_blueprint"
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "limen:powered_polearm_blueprint"
+        }
+      ]
+    }
+  ]
 }
